@@ -1,0 +1,34 @@
+name: Battle Ball Startup White Screen Audit
+
+on:
+  push:
+    branches: [chatgpt/startup-white-screen-fix]
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/startup-white-screen-fix
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+      - name: Install audit browser
+        run: |
+          npm install --no-save --package-lock=false --legacy-peer-deps playwright@1.55.0
+          npx playwright install --with-deps chromium
+      - name: Audit public startup
+        run: node scripts/startup-audit.mjs
+      - name: Upload diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: battle-ball-startup-audit-${{ github.sha }}
+          path: artifacts/startup-audit
+          if-no-files-found: error
+          retention-days: 7
