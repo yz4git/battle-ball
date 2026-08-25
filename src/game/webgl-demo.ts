@@ -309,8 +309,14 @@ export class BattleBallWebGLDemo implements BattleBallRuntime {
       visual.activeScale = THREE.MathUtils.lerp(visual.activeScale, player.active ? 1 : 0.78, 0.22);
       visual.root.scale.set(visual.activeScale, visual.activeScale, visual.activeScale);
       visual.body.material.emissiveIntensity = player.stunSeconds > 0 ? 3.4 : 1.2;
-      visual.ring.material.opacity = player.stunSeconds > 0 ? 0.98 : 0.66;
-      visual.ring.scale.setScalar(player.stunSeconds > 0 ? 1.12 + Math.sin(snapshot.clockSeconds * 22) * 0.08 : 1);
+      const isControlled = player.id === snapshot.controlledPlayerId;
+      const isAimTarget = player.id === snapshot.aimTargetId;
+      const isTelegraphThrower = player.id === snapshot.telegraph?.throwerId;
+      const ringColor = isTelegraphThrower ? 0xffd166 : isAimTarget ? 0xffffff : TEAM_COLORS[player.team];
+      visual.ring.material.color.setHex(ringColor);
+      visual.ring.material.opacity = player.stunSeconds > 0 || isControlled || isAimTarget || isTelegraphThrower ? 0.98 : 0.58;
+      const ringPulse = isTelegraphThrower ? 1.16 + Math.sin(snapshot.clockSeconds * 18) * 0.12 : isAimTarget ? 1.12 : player.stunSeconds > 0 ? 1.1 : 1;
+      visual.ring.scale.setScalar(ringPulse);
       visual.hpFill.scale.x = Math.max(0.001, player.hp / player.maxHp);
       visual.hpFill.position.x = -0.64 * (1 - player.hp / player.maxHp);
     }

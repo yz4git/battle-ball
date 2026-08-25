@@ -118,5 +118,54 @@ test("catching an enemy return builds rally and momentum", () => {
   assert.equal(after.ball.ownerId, after.controlledPlayerId);
   assert.equal(player?.combo, 1);
   assert.ok(after.momentum >= 15);
-  assert.match(player?.lastAction ?? "", /RALLY x1/);
+  assert.match(player?.lastAction ?? "", /CHAIN x1/);
+});
+
+
+test("DASH can aggressively break-steal from an enemy holder", () => {
+  const simulation = new BattleBallSimulation();
+  const state = simulation as unknown as { snapshotState: ReturnType<BattleBallSimulation["snapshot"]> };
+  const controlled = state.snapshotState.players.find((player) => player.id === state.snapshotState.controlledPlayerId);
+  const enemy = state.snapshotState.players.find((player) => player.id === "red-1");
+  assert.ok(controlled);
+  assert.ok(enemy);
+  enemy.position = { x: controlled.position.x, z: controlled.position.z + 3.25 };
+  state.snapshotState.ball.mode = "HELD";
+  state.snapshotState.ball.ownerId = enemy.id;
+  state.snapshotState.ball.throwerId = null;
+  state.snapshotState.ball.position = { ...enemy.position };
+  simulation.step({ ...EMPTY_INPUT, dashPressed: true, moveZ: 1 });
+  const after = simulation.snapshot();
+  const afterEnemy = after.players.find((player) => player.id === enemy.id);
+  const afterControlled = after.players.find((player) => player.id === after.controlledPlayerId);
+  assert.equal(after.ball.ownerId, after.controlledPlayerId);
+  assert.ok((afterEnemy?.stunSeconds ?? 0) > 0);
+  assert.ok((afterControlled?.combo ?? 0) >= 2);
+  assert.match(afterControlled?.lastAction ?? "", /BREAK STEAL/);
+});
+
+test("successful offense builds chain and rebounds the ball away from the victim", () => {
+  const simulation = new BattleBallSimulation();
+  const state = simulation as unknown as { snapshotState: ReturnType<BattleBallSimulation["snapshot"]> };
+  const controlled = state.snapshotState.players.find((player) => player.id === state.snapshotState.controlledPlayerId);
+  const enemy = state.snapshotState.players.find((player) => player.id === "red-1");
+  assert.ok(controlled);
+  assert.ok(enemy);
+  enemy.position = { x: controlled.position.x, z: controlled.position.z + 2.1 };
+  simulation.step({ ...EMPTY_INPUT, ballPressed: true, ballHeld: true });
+  simulation.step({ ...EMPTY_INPUT, ballReleased: true });
+  let hit = false;
+  for (let tick = 0; tick < 40; tick += 1) {
+    simulation.step(EMPTY_INPUT);
+    const snapshot = simulation.snapshot();
+    if (snapshot.events.some((event) => event.kind === "hit" && event.targetId === enemy.id)) {
+      hit = true;
+      const leader = snapshot.players.find((player) => player.id === snapshot.controlledPlayerId);
+      assert.ok((leader?.combo ?? 0) >= 1);
+      assert.equal(snapshot.ball.mode, "FREE");
+      assert.ok(Math.hypot(snapshot.ball.velocity.x, snapshot.ball.velocity.z) > 5);
+      break;
+    }
+  }
+  assert.equal(hit, true);
 });

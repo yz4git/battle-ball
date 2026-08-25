@@ -41,7 +41,7 @@ body {
   touch-action: none;
 }
 
-button { color: inherit; font: inherit; touch-action: none; -webkit-tap-highlight-color: transparent; }
+button { color: inherit; font: inherit; touch-action: none; -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; user-select: none; }
 
 [hidden] { display: none !important; }
 
@@ -54,6 +54,7 @@ button { color: inherit; font: inherit; touch-action: none; -webkit-tap-highligh
   overflow: hidden;
   background: #050a19;
   touch-action: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 #game-canvas {

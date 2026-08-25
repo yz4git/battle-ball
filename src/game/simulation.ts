@@ -24,9 +24,9 @@ const ENEMY_HOLD_BEFORE_AIM = 0.2;
 const HUMAN_AIM_CHARGE_SECONDS = 0.52;
 
 const ROLE_SPEED: Record<PlayerRole, number> = {
-  POWER: 4.6,
-  SPEED: 6.2,
-  TRICK: 5.4,
+  POWER: 5.6,
+  SPEED: 7.4,
+  TRICK: 6.4,
 };
 
 const ROLE_HP: Record<PlayerRole, number> = {
@@ -226,23 +226,62 @@ export class BattleBallSimulation {
     if (hasDirection) player.facing = direction;
 
     if (input.dashPressed && player.dashCooldown <= 0) {
-      player.dashSeconds = 0.22;
-      player.dashCooldown = player.role === "SPEED" ? 0.62 : 0.88;
-      player.position.x += direction.x * (player.role === "SPEED" ? 2.8 : 2.35);
-      player.position.z += direction.z * (player.role === "SPEED" ? 2.8 : 2.35);
+      player.dashSeconds = 0.26;
+      player.dashCooldown = player.role === "SPEED" ? 0.45 : 0.62;
+      const dashDistance = player.role === "SPEED" ? 3.7 : 3.1;
+      player.position.x += direction.x * dashDistance;
+      player.position.z += direction.z * dashDistance;
+      player.position.x = clamp(player.position.x, -ARENA_BOUNDS.halfWidth + PLAYER_RADIUS, ARENA_BOUNDS.halfWidth - PLAYER_RADIUS);
+      player.position.z = clamp(player.position.z, -ARENA_BOUNDS.halfDepth + PLAYER_RADIUS, ARENA_BOUNDS.halfDepth - PLAYER_RADIUS);
       player.lastAction = "DASH";
-      this.emit("dash", player.id, null, player.position, player.role === "SPEED" ? 2.8 : 2.35, "DASH");
+      this.emit("dash", player.id, null, player.position, dashDistance, "DASH");
+      this.tryDashSteal(player);
     }
 
-    let speedScale = player.dashSeconds > 0 ? 2.2 : 1;
+    let speedScale = player.dashSeconds > 0 ? 2.35 : 1;
     if (player.id === this.snapshotState.controlledPlayerId && this.snapshotState.ball.ownerId === player.id && input.ballHeld) {
-      speedScale *= 0.62;
+      speedScale *= 0.78;
     }
     const speed = ROLE_SPEED[player.role] * speedScale;
     player.position.x += direction.x * speed * delta;
     player.position.z += direction.z * speed * delta;
     player.position.x = clamp(player.position.x, -ARENA_BOUNDS.halfWidth + PLAYER_RADIUS, ARENA_BOUNDS.halfWidth - PLAYER_RADIUS);
     player.position.z = clamp(player.position.z, -ARENA_BOUNDS.halfDepth + PLAYER_RADIUS, ARENA_BOUNDS.halfDepth - PLAYER_RADIUS);
+  }
+
+  private tryDashSteal(player: PlayerState): void {
+    if (player.id !== this.snapshotState.controlledPlayerId) return;
+    const ball = this.snapshotState.ball;
+    if (ball.mode === "FREE") {
+      if (distance(player.position, ball.position) > 2.2) return;
+      ball.mode = "HELD";
+      ball.ownerId = player.id;
+      ball.throwerId = null;
+      ball.position = cloneVec(player.position);
+      ball.velocity = { x: 0, z: 0 };
+      ball.heldSeconds = 0;
+      player.combo = Math.min(player.combo + 1, 9);
+      player.lastAction = `BOOST CLAIM! CHAIN x${player.combo}`;
+      this.snapshotState.momentum = clamp(this.snapshotState.momentum + 8, 0, 100);
+      this.emit("dodge", player.id, null, player.position, player.combo, player.lastAction);
+      return;
+    }
+    if (ball.mode !== "HELD" || !ball.ownerId) return;
+    const owner = this.findPlayer(ball.ownerId);
+    if (!owner?.active || owner.team === player.team || distance(player.position, owner.position) > 1.85) return;
+    ball.ownerId = player.id;
+    ball.throwerId = null;
+    ball.position = cloneVec(player.position);
+    ball.velocity = { x: 0, z: 0 };
+    ball.age = 0;
+    ball.heldSeconds = 0;
+    owner.stunSeconds = Math.max(owner.stunSeconds, 0.34);
+    owner.lastAction = "BROKEN";
+    this.snapshotState.telegraph = null;
+    player.combo = Math.min(player.combo + 2, 9);
+    player.lastAction = `BREAK STEAL! CHAIN x${player.combo}`;
+    this.snapshotState.momentum = clamp(this.snapshotState.momentum + 22, 0, 100);
+    this.emit("dodge", player.id, owner.id, player.position, player.combo, player.lastAction);
   }
 
   private clearAimIfUnavailable(): void {
@@ -281,9 +320,11 @@ export class BattleBallSimulation {
       const target = this.findPlayer(this.snapshotState.aimTargetId) ?? this.nearestOpponent(player.position, player.team);
       if (!target) return;
       const kind = this.humanThrowKind(input, this.snapshotState.aimCharge);
-      const rallyBonus = 1 + Math.min(player.combo, 6) * 0.08;
-      const surgeBonus = this.snapshotState.momentum >= 80 ? 1.18 : 1;
-      const chargeBonus = (1 + this.snapshotState.aimCharge * 0.18) * rallyBonus * surgeBonus;
+      const chainBonus = 1 + Math.min(player.combo, 6) * 0.09;
+      const surgeBonus = this.snapshotState.momentum >= 80 ? 1.2 : 1;
+      const targetGap = distance(player.position, target.position);
+      const pressureBonus = 1 + clamp((5.2 - targetGap) / 5.2, 0, 1) * 0.38;
+      const chargeBonus = (1 + this.snapshotState.aimCharge * 0.16) * chainBonus * surgeBonus * pressureBonus;
       this.throwBallAt(player, target, kind, chargeBonus);
       this.snapshotState.aimTargetId = null;
       this.snapshotState.aimCharge = 0;
@@ -458,10 +499,14 @@ export class BattleBallSimulation {
         const controlledCatch = player.id === this.snapshotState.controlledPlayerId;
         const perfect = controlledCatch && catchDistance <= PERFECT_CATCH_DISTANCE;
         player.lastAction = controlledCatch
-          ? `${perfect ? "PERFECT" : "CATCH"}! RALLY x${player.combo}`
+          ? `${perfect ? "PERFECT" : "CATCH"}! CHAIN x${player.combo}`
           : "CATCH";
         if (controlledCatch) {
           this.snapshotState.momentum = clamp(this.snapshotState.momentum + (perfect ? 26 : 15), 0, 100);
+        } else if (throwerTeam === "blue") {
+          const leader = this.findPlayer(this.snapshotState.controlledPlayerId);
+          if (leader) leader.combo = 0;
+          this.snapshotState.momentum = clamp(this.snapshotState.momentum - 12, 0, 100);
         }
         this.emit("catch", player.id, null, player.position, player.combo, player.lastAction);
         return;
@@ -499,7 +544,8 @@ export class BattleBallSimulation {
 
       const bounced = this.handleWall(ball);
       if (bounced) return;
-      if (ball.age > 2.8) {
+      if (ball.age > 2.3) {
+        this.breakPlayerChain(ball);
         ball.mode = "FREE";
         ball.ownerId = null;
         ball.throwerId = null;
@@ -514,12 +560,13 @@ export class BattleBallSimulation {
     ball.velocity.z *= Math.pow(0.12, delta);
     this.handleWall(ball);
     if (ball.mode !== "FREE") return;
-    const claimants = this.snapshotState.players.filter((player) => player.active && (player.team === "red" || player.id === this.snapshotState.controlledPlayerId));
+    const claimants = this.snapshotState.players.filter((player) => player.active && player.stunSeconds <= 0 && (player.team === "red" || player.id === this.snapshotState.controlledPlayerId));
     const nearest = claimants.reduce<PlayerState | null>((closest, player) => {
       if (!closest) return player;
       return distance(player.position, ball.position) < distance(closest.position, ball.position) ? player : closest;
     }, null);
-    if (nearest && distance(nearest.position, ball.position) < 1.05) {
+    const claimRadius = nearest?.id === this.snapshotState.controlledPlayerId ? 1.5 : 0.95;
+    if (nearest && distance(nearest.position, ball.position) < claimRadius) {
       ball.mode = "HELD";
       ball.ownerId = nearest.id;
       ball.throwerId = null;
@@ -527,6 +574,14 @@ export class BattleBallSimulation {
       ball.heldSeconds = 0;
       nearest.lastAction = "BALL CLAIMED";
     }
+  }
+
+  private breakPlayerChain(ball: BallState): void {
+    const thrower = this.findPlayer(ball.throwerId);
+    if (thrower?.team !== "blue") return;
+    const leader = this.findPlayer(this.snapshotState.controlledPlayerId);
+    if (leader) leader.combo = 0;
+    this.snapshotState.momentum = clamp(this.snapshotState.momentum - 10, 0, 100);
   }
 
   private handleWall(ball: BallState): boolean {
@@ -540,6 +595,7 @@ export class BattleBallSimulation {
         ball.bounces += 1;
         bounced = true;
       } else {
+        this.breakPlayerChain(ball);
         ball.position.x = clamp(ball.position.x, -limitX, limitX);
         ball.mode = "FREE";
         ball.ownerId = null;
@@ -555,6 +611,7 @@ export class BattleBallSimulation {
         ball.bounces += 1;
         bounced = true;
       } else {
+        this.breakPlayerChain(ball);
         ball.position.z = clamp(ball.position.z, -limitZ, limitZ);
         ball.mode = "FREE";
         ball.ownerId = null;
@@ -568,16 +625,31 @@ export class BattleBallSimulation {
 
   private hitPlayer(player: PlayerState, ball: BallState): void {
     const damage = ball.damage;
+    const throwerId = ball.throwerId;
+    const thrower = this.findPlayer(throwerId);
     player.hp = Math.max(0, player.hp - damage);
     player.stunSeconds = ball.kind === "RUSH" ? 0.6 : 0.38;
     player.combo = 0;
     player.lastAction = `HIT -${damage}`;
-    this.snapshotState.momentum = clamp(this.snapshotState.momentum + (player.team === "red" ? 14 : -20), 0, 100);
-    this.emit("hit", ball.throwerId, player.id, player.position, damage, `HIT -${damage}`, ball.kind);
+    let label = `HIT -${damage}`;
+    if (player.team === "red" && thrower?.team === "blue") {
+      const leader = this.findPlayer(this.snapshotState.controlledPlayerId);
+      if (leader) {
+        leader.combo = Math.min(leader.combo + 1, 9);
+        leader.lastAction = `BREAK! CHAIN x${leader.combo}`;
+        label = `BREAK -${damage} // CHAIN x${leader.combo}`;
+      }
+      this.snapshotState.momentum = clamp(this.snapshotState.momentum + 22, 0, 100);
+    } else {
+      this.snapshotState.momentum = clamp(this.snapshotState.momentum - 22, 0, 100);
+    }
+    this.emit("hit", throwerId, player.id, player.position, damage, label, ball.kind);
+    const rebound = normalize({ x: -player.position.x, z: -player.position.z }, { x: 0, z: player.team === "red" ? -1 : 1 });
     ball.mode = "FREE";
     ball.ownerId = null;
     ball.throwerId = null;
-    ball.velocity = { x: -ball.velocity.x * 0.24, z: -ball.velocity.z * 0.24 };
+    ball.position = cloneVec(player.position);
+    ball.velocity = { x: rebound.x * 7.5, z: rebound.z * 7.5 };
     ball.heldSeconds = 0;
     if (player.hp <= 0) {
       player.active = false;
