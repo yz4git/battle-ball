@@ -17,10 +17,11 @@ const FIXED_DELTA = 1 / 60;
 const PLAYER_RADIUS = 0.7;
 const BALL_RADIUS = 0.34;
 const BALL_COLLISION_DISTANCE = 1.05;
-const BALL_CATCH_DISTANCE = 1.62;
+const BALL_CATCH_DISTANCE = 1.85;
+const PERFECT_CATCH_DISTANCE = 0.92;
 const CONTROLLED_PLAYER_ID = "blue-0";
-const ENEMY_HOLD_BEFORE_AIM = 0.5;
-const HUMAN_AIM_CHARGE_SECONDS = 0.82;
+const ENEMY_HOLD_BEFORE_AIM = 0.2;
+const HUMAN_AIM_CHARGE_SECONDS = 0.52;
 
 const ROLE_SPEED: Record<PlayerRole, number> = {
   POWER: 4.6,
@@ -235,7 +236,7 @@ export class BattleBallSimulation {
 
     let speedScale = player.dashSeconds > 0 ? 2.2 : 1;
     if (player.id === this.snapshotState.controlledPlayerId && this.snapshotState.ball.ownerId === player.id && input.ballHeld) {
-      speedScale *= 0.24;
+      speedScale *= 0.62;
     }
     const speed = ROLE_SPEED[player.role] * speedScale;
     player.position.x += direction.x * speed * delta;
@@ -280,7 +281,9 @@ export class BattleBallSimulation {
       const target = this.findPlayer(this.snapshotState.aimTargetId) ?? this.nearestOpponent(player.position, player.team);
       if (!target) return;
       const kind = this.humanThrowKind(input, this.snapshotState.aimCharge);
-      const chargeBonus = 1 + this.snapshotState.aimCharge * 0.16;
+      const rallyBonus = 1 + Math.min(player.combo, 6) * 0.08;
+      const surgeBonus = this.snapshotState.momentum >= 80 ? 1.18 : 1;
+      const chargeBonus = (1 + this.snapshotState.aimCharge * 0.18) * rallyBonus * surgeBonus;
       this.throwBallAt(player, target, kind, chargeBonus);
       this.snapshotState.aimTargetId = null;
       this.snapshotState.aimCharge = 0;
@@ -322,7 +325,7 @@ export class BattleBallSimulation {
     ball.velocity = { x: 0, z: 0 };
     ball.heldSeconds = 0;
     const kind: ThrowKind = teammate.role === "POWER" ? "RUSH" : teammate.role === "TRICK" ? "CURVE" : "STRAIGHT";
-    const totalSeconds = teammate.role === "SPEED" ? 0.24 : teammate.role === "POWER" ? 0.4 : 0.32;
+    const totalSeconds = teammate.role === "SPEED" ? 0.18 : teammate.role === "POWER" ? 0.3 : 0.24;
     this.snapshotState.telegraph = {
       source: "ASSIST",
       throwerId: teammate.id,
@@ -352,7 +355,9 @@ export class BattleBallSimulation {
     thrower.facing = normalize({ x: target.position.x - thrower.position.x, z: target.position.z - thrower.position.z }, thrower.facing);
     telegraph.secondsRemaining = Math.max(0, telegraph.secondsRemaining - delta);
     if (telegraph.secondsRemaining > 0) return;
-    const damageBonus = telegraph.source === "ASSIST" ? 1.1 : 1;
+    const leader = this.findPlayer(this.snapshotState.controlledPlayerId);
+    const assistRallyBonus = 1 + Math.min(leader?.combo ?? 0, 6) * 0.06;
+    const damageBonus = telegraph.source === "ASSIST" ? 1.12 * assistRallyBonus : 1;
     this.snapshotState.telegraph = null;
     this.throwBallAt(thrower, target, telegraph.kind, damageBonus);
   }
@@ -366,7 +371,7 @@ export class BattleBallSimulation {
     const target = this.findPlayer(this.snapshotState.controlledPlayerId);
     if (!target?.active) return;
     const kind: ThrowKind = owner.role === "POWER" ? "RUSH" : owner.role === "TRICK" ? "CURVE" : "STRAIGHT";
-    const totalSeconds = owner.role === "SPEED" ? 0.62 : owner.role === "POWER" ? 0.86 : 0.76;
+    const totalSeconds = owner.role === "SPEED" ? 0.48 : owner.role === "POWER" ? 0.68 : 0.58;
     this.snapshotState.telegraph = {
       source: "ENEMY",
       throwerId: owner.id,
@@ -388,7 +393,11 @@ export class BattleBallSimulation {
       const side = target.position.x >= player.position.x ? 1 : -1;
       direction = normalize({ x: targetDirection.x * 0.92 + side * 0.28, z: targetDirection.z * 0.92 }, targetDirection);
     }
-    const speed = kind === "RUSH" ? 15.8 : kind === "STRAIGHT" ? 12.7 : kind === "CURVE" ? 11.3 : 10;
+    const baseSpeed = kind === "RUSH" ? 15.8 : kind === "STRAIGHT" ? 12.7 : kind === "CURVE" ? 11.3 : 10;
+    const rallyLeader = player.team === "blue" ? this.findPlayer(this.snapshotState.controlledPlayerId) : null;
+    const rallyStack = Math.min(rallyLeader?.combo ?? 0, 6);
+    const speedMultiplier = 1 + rallyStack * 0.045 + (this.snapshotState.momentum >= 80 && player.team === "blue" ? 0.08 : 0);
+    const speed = baseSpeed * speedMultiplier;
     const baseDamage = kind === "SKY" ? 35 : kind === "RUSH" ? 32 : kind === "CURVE" ? 25 : 28;
     const damage = Math.round(baseDamage * ROLE_DAMAGE[player.role] * damageBonus);
     ball.mode = "FLYING";
@@ -401,9 +410,10 @@ export class BattleBallSimulation {
     ball.heldSeconds = 0;
     ball.damage = damage;
     ball.bounces = 0;
-    player.throwCooldown = player.role === "POWER" ? 0.38 : 0.3;
-    player.lastAction = `${kind}_THROW`;
-    this.emit("throw", player.id, target.id, ball.position, damage, `${kind} THROW`, kind);
+    player.throwCooldown = player.role === "POWER" ? 0.34 : 0.26;
+    const rallyLabel = player.team === "blue" && rallyStack > 0 ? ` COUNTER x${rallyStack}` : "";
+    player.lastAction = `${kind}${rallyLabel}`;
+    this.emit("throw", player.id, target.id, ball.position, damage, `${kind}${rallyLabel}`, kind);
   }
 
   private updateBall(delta: number, inputs: InputMap): void {
@@ -435,18 +445,23 @@ export class BattleBallSimulation {
         if (player.team === "blue" && player.id !== this.snapshotState.controlledPlayerId) continue;
         const input = inputs[player.id] ?? EMPTY_INPUT;
         if (!input.ballPressed || player.catchCooldown > 0 || player.dashSeconds > 0) continue;
-        if (distance(player.position, ball.position) > BALL_CATCH_DISTANCE) continue;
+        const catchDistance = distance(player.position, ball.position);
+        if (catchDistance > BALL_CATCH_DISTANCE) continue;
         ball.mode = "HELD";
         ball.ownerId = player.id;
         ball.throwerId = null;
         ball.velocity = { x: 0, z: 0 };
         ball.age = 0;
         ball.heldSeconds = 0;
-        player.catchCooldown = 0.34;
-        player.combo += 1;
-        player.lastAction = player.id === this.snapshotState.controlledPlayerId ? "PERFECT CATCH" : "CATCH";
-        if (player.id === this.snapshotState.controlledPlayerId) {
-          this.snapshotState.momentum = clamp(this.snapshotState.momentum + 14, 0, 100);
+        player.catchCooldown = 0.24;
+        player.combo = Math.min(player.combo + 1, 9);
+        const controlledCatch = player.id === this.snapshotState.controlledPlayerId;
+        const perfect = controlledCatch && catchDistance <= PERFECT_CATCH_DISTANCE;
+        player.lastAction = controlledCatch
+          ? `${perfect ? "PERFECT" : "CATCH"}! RALLY x${player.combo}`
+          : "CATCH";
+        if (controlledCatch) {
+          this.snapshotState.momentum = clamp(this.snapshotState.momentum + (perfect ? 26 : 15), 0, 100);
         }
         this.emit("catch", player.id, null, player.position, player.combo, player.lastAction);
         return;
@@ -455,13 +470,27 @@ export class BattleBallSimulation {
       for (const player of catchers) {
         if (distance(player.position, ball.position) > BALL_COLLISION_DISTANCE) continue;
         if (player.dashSeconds > 0) {
-          ball.mode = "FREE";
-          ball.ownerId = null;
-          ball.throwerId = null;
-          ball.velocity = { x: -ball.velocity.x * 0.28, z: -ball.velocity.z * 0.28 };
-          ball.heldSeconds = 0;
-          player.lastAction = "DODGE";
-          this.emit("dodge", player.id, null, player.position, 0, "DODGE");
+          if (player.id === this.snapshotState.controlledPlayerId) {
+            ball.mode = "HELD";
+            ball.ownerId = player.id;
+            ball.throwerId = null;
+            ball.position = cloneVec(player.position);
+            ball.velocity = { x: 0, z: 0 };
+            ball.age = 0;
+            ball.heldSeconds = 0;
+            player.combo = Math.min(player.combo + 1, 9);
+            player.lastAction = `DASH STEAL! RALLY x${player.combo}`;
+            this.snapshotState.momentum = clamp(this.snapshotState.momentum + 12, 0, 100);
+            this.emit("dodge", player.id, null, player.position, player.combo, player.lastAction);
+          } else {
+            ball.mode = "FREE";
+            ball.ownerId = null;
+            ball.throwerId = null;
+            ball.velocity = { x: -ball.velocity.x * 0.28, z: -ball.velocity.z * 0.28 };
+            ball.heldSeconds = 0;
+            player.lastAction = "DODGE";
+            this.emit("dodge", player.id, null, player.position, 0, "DODGE");
+          }
           return;
         }
         this.hitPlayer(player, ball);
@@ -543,7 +572,7 @@ export class BattleBallSimulation {
     player.stunSeconds = ball.kind === "RUSH" ? 0.6 : 0.38;
     player.combo = 0;
     player.lastAction = `HIT -${damage}`;
-    this.snapshotState.momentum = clamp(this.snapshotState.momentum + (player.team === "red" ? 10 : -8), 0, 100);
+    this.snapshotState.momentum = clamp(this.snapshotState.momentum + (player.team === "red" ? 14 : -20), 0, 100);
     this.emit("hit", ball.throwerId, player.id, player.position, damage, `HIT -${damage}`, ball.kind);
     ball.mode = "FREE";
     ball.ownerId = null;

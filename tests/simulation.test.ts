@@ -98,3 +98,25 @@ test("reset returns the simulation to tick zero", () => {
   assert.equal(snapshot.ball.ownerId, "blue-0");
   assert.equal(snapshot.telegraph, null);
 });
+
+
+test("catching an enemy return builds rally and momentum", () => {
+  const simulation = new BattleBallSimulation();
+  const state = simulation as unknown as { snapshotState: ReturnType<BattleBallSimulation["snapshot"]> };
+  const controlled = state.snapshotState.players.find((player) => player.id === state.snapshotState.controlledPlayerId);
+  assert.ok(controlled);
+  state.snapshotState.ball.mode = "FLYING";
+  state.snapshotState.ball.ownerId = null;
+  state.snapshotState.ball.throwerId = "red-0";
+  state.snapshotState.ball.position = { x: controlled.position.x, z: controlled.position.z + 1.2 };
+  state.snapshotState.ball.velocity = { x: 0, z: -12 };
+  state.snapshotState.ball.kind = "STRAIGHT";
+  state.snapshotState.ball.damage = 20;
+  simulation.step({ ...EMPTY_INPUT, ballPressed: true, ballHeld: true });
+  const after = simulation.snapshot();
+  const player = after.players.find((candidate) => candidate.id === after.controlledPlayerId);
+  assert.equal(after.ball.ownerId, after.controlledPlayerId);
+  assert.equal(player?.combo, 1);
+  assert.ok(after.momentum >= 15);
+  assert.match(player?.lastAction ?? "", /RALLY x1/);
+});
