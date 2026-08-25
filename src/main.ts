@@ -168,7 +168,6 @@ function updateHud(snapshot: MatchSnapshot): void {
   if (redHp) redHp.style.width = `${(red.hp / red.maxHp) * 100}%`;
   if (momentumFill) {
     momentumFill.style.width = `${Math.max(2, Math.min(98, snapshot.momentum))}%`;
-    momentumFill.style.left = `${Math.max(0, Math.min(100, snapshot.momentum))}%`;
   }
   if (clockLabel) clockLabel.textContent = formatClock(snapshot.clockSeconds);
   const owner = snapshot.players.find((player) => player.id === snapshot.ball.ownerId);
