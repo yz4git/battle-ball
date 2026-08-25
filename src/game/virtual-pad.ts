@@ -13,17 +13,39 @@ const ORDER: Exclude<DigitalDirection, "NEUTRAL">[] = [
   "UP", "UP_RIGHT", "RIGHT", "DOWN_RIGHT", "DOWN", "DOWN_LEFT", "LEFT", "UP_LEFT",
 ];
 
-export function quantizeDirection(x: number, y: number, radius: number, previous: DigitalDirection = "NEUTRAL"): DigitalDirection {
+export const VIRTUAL_PAD_DEADZONE = 0.2;
+export const VIRTUAL_PAD_HYSTERESIS_DEGREES = 6;
+
+function wrapDegrees(value: number): number {
+  let result = value % 360;
+  if (result > 180) result -= 360;
+  if (result < -180) result += 360;
+  return result;
+}
+
+function directionAngle(direction: Exclude<DigitalDirection, "NEUTRAL">): number {
+  return ORDER.indexOf(direction) * 45;
+}
+
+/** Converts a pad vector (where positive y means the top of the pad) to 8-way input. */
+export function quantizeDirection(
+  x: number,
+  y: number,
+  outerRadius: number,
+  previous: DigitalDirection = "NEUTRAL",
+  deadzone = VIRTUAL_PAD_DEADZONE,
+  hysteresisDegrees = VIRTUAL_PAD_HYSTERESIS_DEGREES,
+): DigitalDirection {
+  const radius = Math.max(0, outerRadius);
   const magnitude = Math.hypot(x, y);
-  if (!Number.isFinite(magnitude) || radius <= 0 || magnitude <= radius * 0.2) return "NEUTRAL";
+  if (!Number.isFinite(magnitude) || radius <= 0 || magnitude <= radius * deadzone) return "NEUTRAL";
   const angle = (Math.atan2(x, y) * 180) / Math.PI;
   const sector = Math.round(angle / 45);
   const candidate = ORDER[((sector % 8) + 8) % 8] ?? "UP";
   if (previous === "NEUTRAL") return candidate;
-  const previousAngle = ORDER.indexOf(previous) * 45;
-  let delta = Math.abs(angle - previousAngle) % 360;
-  if (delta > 180) delta = 360 - delta;
-  return delta <= 29 ? previous : candidate;
+  const previousAngle = directionAngle(previous);
+  const distanceFromPrevious = Math.abs(wrapDegrees(angle - previousAngle));
+  return distanceFromPrevious <= 22.5 + Math.max(0, hysteresisDegrees) ? previous : candidate;
 }
 
 export function directionVector(direction: DigitalDirection): { x: number; z: number } {
