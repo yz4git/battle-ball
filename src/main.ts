@@ -3,6 +3,7 @@ import { BattleBallCanvasDemo } from "./game/canvas-demo.ts";
 import type { InputAction } from "./game/input.ts";
 import { BattleBallWebGLDemo } from "./game/webgl-demo.ts";
 import { directionVector, VirtualPadTracker, type DigitalDirection } from "./game/virtual-pad.ts";
+import { registerBattleBallServiceWorker } from "./service-worker-registration.ts";
 import type { BattleBallRuntime, GameRuntimeCallbacks } from "./game/runtime.ts";
 import type { MatchSnapshot, PlayerState, TeamId } from "./game/types.ts";
 
@@ -217,6 +218,7 @@ function escapeHtml(value: string): string {
 function startMatch(): void {
   matchStarted = true;
   isPaused = false;
+  resetPad();
   startScreen?.setAttribute("hidden", "true");
   pauseScreen?.setAttribute("hidden", "true");
   resultScreen?.setAttribute("hidden", "true");
@@ -228,6 +230,7 @@ function togglePause(): void {
   if (!matchStarted || !runtime) return;
   isPaused = !isPaused;
   if (isPaused) {
+    resetPad();
     runtime.pause();
     if (pauseScreen) pauseScreen.hidden = false;
     if (pauseButton) pauseButton.textContent = "▶";
@@ -241,6 +244,7 @@ function togglePause(): void {
 function rematch(): void {
   feedEvents = [];
   renderFeed();
+  resetPad();
   runtime?.reset();
   if (resultScreen) resultScreen.hidden = true;
   matchStarted = true;
@@ -264,7 +268,8 @@ function applyPadDirection(direction: DigitalDirection): void {
   if (vector.z < -0.1) runtime?.press("down", "pad");
   if (vector.z > 0.1) runtime?.press("up", "pad");
   if (padKnob) {
-    padKnob.style.transform = `translate(${vector.x * 28}px, ${-vector.z * 28}px)`;
+    padKnob.style.setProperty("--pad-x", `${vector.x * 28}px`);
+    padKnob.style.setProperty("--pad-y", `${-vector.z * 28}px`);
   }
 }
 
@@ -274,13 +279,13 @@ function padCoordinates(event: PointerEvent): { x: number; y: number; radius: nu
   return {
     x: event.clientX - (rect.left + rect.width / 2),
     y: rect.top + rect.height / 2 - event.clientY,
-    radius: Math.min(rect.width, rect.height) * 0.42,
+    radius: Math.min(rect.width, rect.height) * 0.5,
   };
 }
 
 pad?.addEventListener("pointerdown", (event) => {
   event.preventDefault();
-  pad.setPointerCapture(event.pointerId);
+  pad.setPointerCapture?.(event.pointerId);
   const point = padCoordinates(event);
   applyPadDirection(virtualPad.begin(event.pointerId, point.x, point.y, point.radius));
 });
@@ -296,8 +301,16 @@ const releasePad = (event: PointerEvent): void => {
   runtime?.releaseOwner("pad");
   applyPadDirection("NEUTRAL");
 };
+const resetPad = (): void => {
+  virtualPad.reset();
+  runtime?.releaseOwner("pad");
+  applyPadDirection("NEUTRAL");
+};
 pad?.addEventListener("pointerup", releasePad);
 pad?.addEventListener("pointercancel", releasePad);
+pad?.addEventListener("lostpointercapture", releasePad);
+window.addEventListener("pointerup", releasePad);
+window.addEventListener("pointercancel", releasePad);
 
 for (const button of app.querySelectorAll<HTMLButtonElement>(".action-button")) {
   const action = button.dataset.action as InputAction;
@@ -314,13 +327,15 @@ for (const button of app.querySelectorAll<HTMLButtonElement>(".action-button")) 
 }
 
 window.addEventListener("blur", () => {
-  runtime?.releaseOwner("pad");
+  resetPad();
   runtime?.releaseOwner("keyboard");
-  virtualPad.reset();
-  applyPadDirection("NEUTRAL");
 });
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) resetPad();
+});
+window.addEventListener("pagehide", resetPad);
 window.addEventListener("contextmenu", (event) => event.preventDefault());
-if ("serviceWorker" in navigator) void navigator.serviceWorker.register("/sw.js").catch(() => undefined);
+registerBattleBallServiceWorker();
 
 // Keeps the first HUD frame useful even before the first animation callback.
 if (runtime) updateHud(runtime.snapshot());
