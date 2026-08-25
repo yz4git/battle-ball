@@ -265,6 +265,7 @@ button { color: inherit; font: inherit; }
   border-radius: 50%;
   background: radial-gradient(circle, rgba(85, 193, 255, .16), rgba(24, 58, 104, .12) 48%, rgba(4, 10, 23, .52) 49%, rgba(4, 10, 23, .32));
   box-shadow: inset 0 0 24px rgba(79, 185, 255, .12), 0 0 18px rgba(0,0,0,.28);
+  pointer-events: none;
 }
 .pad-ring::before,
 .pad-ring::after { content: ""; position: absolute; background: rgba(186, 226, 255, .18); }
@@ -276,12 +277,15 @@ button { color: inherit; font: inherit; }
   top: 50%;
   width: 35%;
   height: 35%;
-  transform: translate(-50%, -50%);
+  --pad-x: 0px;
+  --pad-y: 0px;
+  transform: translate(calc(-50% + var(--pad-x)), calc(-50% + var(--pad-y)));
   border: 1px solid rgba(220, 248, 255, .7);
   border-radius: 50%;
   background: radial-gradient(circle at 35% 30%, #bdf5ff, #3a9fd0 42%, #153c67 100%);
   box-shadow: 0 0 16px rgba(67,207,255,.55);
   transition: transform .08s ease;
+  pointer-events: none;
 }
 .pad-caption { position: absolute; left: 50%; bottom: -16px; transform: translateX(-50%); color: rgba(180, 213, 237, .6); font-size: 8px; }
 
