@@ -1,0 +1,63 @@
+name: Battle Ball WebGL Visual Audit
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/webgl-audit.mjs"
+      - ".github/workflows/webgl-audit.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  webgl-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+
+      - name: Install Playwright for audit
+        run: |
+          npm install --no-save --package-lock=false --legacy-peer-deps playwright@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: Capture WebGL frames
+        run: node scripts/webgl-audit.mjs
+
+      - name: Upload WebGL visual audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: battle-ball-webgl-audit-${{ github.sha }}
+          path: artifacts/webgl-audit
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Publish latest frames to visual-audit branch
+        if: success() && github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          AUDIT_SHA: ${{ github.sha }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          rm -rf /tmp/battle-ball-visual-audit
+          mkdir -p /tmp/battle-ball-visual-audit/latest
+          cp -a artifacts/webgl-audit/. /tmp/battle-ball-visual-audit/latest/
+          printf '%s\n' "$AUDIT_SHA" > /tmp/battle-ball-visual-audit/latest/source-sha.txt
+          cd /tmp/battle-ball-visual-audit
+          git init
+          git checkout -b visual-audit
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add latest
+          git commit -m "Battle Ball WebGL visual audit $AUDIT_SHA"
+          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${REPOSITORY}.git"
+          git push --force origin HEAD:visual-audit
