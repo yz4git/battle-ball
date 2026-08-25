@@ -37,7 +37,7 @@ app.innerHTML = `
     <section class="team-hud team-hud--blue" aria-label="Blue team status">
       <div class="team-heading"><span class="team-dot"></span><span>BLUE UNIT</span><strong id="blue-alive">3 / 3</strong></div>
       <div class="team-hp"><i id="blue-hp"></i></div>
-      <span class="team-note">CATCH / DASH → COUNTER</span>
+      <span class="team-note">DASH INTO HOLDER = BREAK STEAL</span>
     </section>
     <section class="team-hud team-hud--red" aria-label="Red team status">
       <div class="team-heading"><span class="team-dot"></span><span>RED UNIT</span><strong id="red-alive">3 / 3</strong></div>
@@ -64,7 +64,7 @@ app.innerHTML = `
       <div class="screen-card">
         <span class="screen-eyebrow">DODGEBALL / PLAYER LED</span>
         <h1>OWN THE<br><em>RALLY.</em></h1>
-        <p>敵の予告を読み、BALLでキャッチかDASHで奪取。成功するほどRALLYが伸び、直後のカウンターが高速・高威力になる。PASSはRALLYを味方の必殺攻撃へ変換。</p>
+        <p>待つな。ボールを持つ敵へDASHで突っ込みBREAK STEAL。BALLはタップで即投げ、長押しで狙う。命中をCHAINし、外す・取られる・被弾でCHAINが切れる。PASSはCHAINを味方の強襲へ変換。</p>
         <button id="start-button" class="primary-button" type="button"><span>ENTER ARENA</span><b>→</b></button>
         <div class="screen-foot"><span>LANDSCAPE / IPHONE READY</span><span>LOCAL 3v3</span></div>
       </div>
@@ -168,8 +168,8 @@ function updateHud(snapshot: MatchSnapshot): void {
   const controlled = snapshot.players.find((player) => player.id === snapshot.controlledPlayerId);
   if (matchLabel && !matchLabel.classList.contains("is-fallback")) {
     matchLabel.textContent = controlled && controlled.combo > 0
-      ? `RALLY x${controlled.combo} // ${snapshot.momentum >= 80 ? "SURGE" : "COUNTER UP"}`
-      : "PLAYER LED // 3v3";
+      ? `CHAIN x${controlled.combo} // ${snapshot.momentum >= 80 ? "OVERDRIVE" : "PRESS ATTACK"}`
+      : "HUNT THE BALL // 3v3";
   }
   if (blueAlive) blueAlive.textContent = `${blue.alive} / 3`;
   if (redAlive) redAlive.textContent = `${red.alive} / 3`;
@@ -290,17 +290,27 @@ rematchButton?.addEventListener("click", rematch);
 pauseButton?.addEventListener("click", togglePause);
 
 const virtualPad = new VirtualPadTracker();
+let padOwner: string | null = null;
 
 function applyPadDirection(direction: DigitalDirection): void {
-  runtime?.releaseOwner("pad");
+  const owner = padOwner;
+  if (!owner) return;
+  runtime?.releaseOwner(owner);
   const vector = directionVector(direction);
-  if (vector.x < -0.1) runtime?.press("left", "pad");
-  if (vector.x > 0.1) runtime?.press("right", "pad");
-  if (vector.z < -0.1) runtime?.press("down", "pad");
-  if (vector.z > 0.1) runtime?.press("up", "pad");
+  if (vector.x < -0.1) runtime?.press("left", owner);
+  if (vector.x > 0.1) runtime?.press("right", owner);
+  if (vector.z < -0.1) runtime?.press("down", owner);
+  if (vector.z > 0.1) runtime?.press("up", owner);
   if (padKnob) {
     padKnob.style.setProperty("--pad-x", `${vector.x * 28}px`);
     padKnob.style.setProperty("--pad-y", `${-vector.z * 28}px`);
+  }
+}
+
+function setPadNeutral(): void {
+  if (padKnob) {
+    padKnob.style.setProperty("--pad-x", "0px");
+    padKnob.style.setProperty("--pad-y", "0px");
   }
 }
 
@@ -315,46 +325,62 @@ function padCoordinates(event: PointerEvent): { x: number; y: number; radius: nu
 }
 
 pad?.addEventListener("pointerdown", (event) => {
+  if (virtualPad.pointerId !== null) return;
   event.preventDefault();
+  event.stopPropagation();
+  padOwner = `pad:${event.pointerId}`;
   pad.setPointerCapture?.(event.pointerId);
   const point = padCoordinates(event);
-  applyPadDirection(virtualPad.begin(event.pointerId, point.x, point.y, point.radius));
+  virtualPad.begin(event.pointerId, point.x, point.y, point.radius);
+  applyPadDirection(virtualPad.move(event.pointerId, point.x, point.y, point.radius));
 });
 pad?.addEventListener("pointermove", (event) => {
   if (virtualPad.pointerId !== event.pointerId) return;
   event.preventDefault();
+  event.stopPropagation();
   const point = padCoordinates(event);
   applyPadDirection(virtualPad.move(event.pointerId, point.x, point.y, point.radius));
 });
 const releasePad = (event: PointerEvent): void => {
   if (virtualPad.pointerId !== event.pointerId) return;
+  event.preventDefault();
+  const owner = padOwner;
   virtualPad.release(event.pointerId);
-  runtime?.releaseOwner("pad");
-  applyPadDirection("NEUTRAL");
+  if (owner) runtime?.releaseOwner(owner);
+  padOwner = null;
+  setPadNeutral();
 };
 const resetPad = (): void => {
+  if (padOwner) runtime?.releaseOwner(padOwner);
   virtualPad.reset();
-  runtime?.releaseOwner("pad");
-  applyPadDirection("NEUTRAL");
+  padOwner = null;
+  setPadNeutral();
 };
 pad?.addEventListener("pointerup", releasePad);
 pad?.addEventListener("pointercancel", releasePad);
 pad?.addEventListener("lostpointercapture", releasePad);
-window.addEventListener("pointerup", releasePad);
-window.addEventListener("pointercancel", releasePad);
 
 for (const button of app.querySelectorAll<HTMLButtonElement>(".action-button")) {
   const action = button.dataset.action as InputAction;
-  const owner = `button:${action}`;
-  const release = (): void => runtime?.release(action, owner);
+  const owners = new Map<number, string>();
+  const release = (event: PointerEvent): void => {
+    event.preventDefault();
+    const owner = owners.get(event.pointerId);
+    if (!owner) return;
+    runtime?.release(action, owner);
+    owners.delete(event.pointerId);
+  };
   button.addEventListener("pointerdown", (event) => {
     event.preventDefault();
-    button.setPointerCapture(event.pointerId);
+    event.stopPropagation();
+    const owner = `button:${action}:${event.pointerId}`;
+    owners.set(event.pointerId, owner);
+    button.setPointerCapture?.(event.pointerId);
     runtime?.press(action, owner);
   });
   button.addEventListener("pointerup", release);
   button.addEventListener("pointercancel", release);
-  button.addEventListener("pointerleave", release);
+  button.addEventListener("lostpointercapture", release);
 }
 
 window.addEventListener("blur", () => {
@@ -367,25 +393,12 @@ document.addEventListener("visibilitychange", () => {
 window.addEventListener("pagehide", resetPad);
 window.addEventListener("contextmenu", (event) => event.preventDefault());
 
-// Safari can still interpret rapid action taps as browser zoom. Block native zoom globally.
-const blockNativeZoom = (event: Event): void => event.preventDefault();
-document.addEventListener("gesturestart", blockNativeZoom, { passive: false });
-document.addEventListener("gesturechange", blockNativeZoom, { passive: false });
-document.addEventListener("gestureend", blockNativeZoom, { passive: false });
-document.addEventListener("touchmove", (event) => {
-  if (event.touches.length > 1) event.preventDefault();
-}, { passive: false });
-let lastTouchEndAt = 0;
-document.addEventListener("touchend", (event) => {
-  const now = performance.now();
-  if (now - lastTouchEndAt < 320) event.preventDefault();
-  lastTouchEndAt = now;
-}, { passive: false, capture: true });
-document.addEventListener("dblclick", blockNativeZoom, { passive: false });
-
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    void navigator.serviceWorker.register("/sw.js").catch(() => undefined);
+    void navigator.serviceWorker
+      .register("/sw.js", { updateViaCache: "none" })
+      .then((registration) => registration.update())
+      .catch(() => undefined);
   }, { once: true });
 }
 
