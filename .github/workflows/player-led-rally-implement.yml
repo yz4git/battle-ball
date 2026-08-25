@@ -1,0 +1,114 @@
+name: Player-led rally implementation
+
+on:
+  push:
+    branches: [chatgpt/player-led-rally]
+
+permissions:
+  contents: write
+
+jobs:
+  implement:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/player-led-rally
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+
+      - name: Apply player-led gameplay presentation
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace(path, old, new):
+              p = Path(path)
+              text = p.read_text()
+              if old not in text:
+                  raise SystemExit(f"missing replacement target in {path}: {old[:80]!r}")
+              p.write_text(text.replace(old, new))
+
+          replace(
+              "src/main.ts",
+              '''        <button class="action-button action-button--pass" data-action="pass" type="button"><span>PASS</span><b>I</b></button>\n        <button class="action-button action-button--dash" data-action="dash" type="button"><span>DASH</span><b>Ⅲ</b></button>\n        <button class="action-button action-button--catch" data-action="catch" type="button"><span>CATCH</span><b>K</b></button>\n        <button class="action-button action-button--throw" data-action="throw" type="button"><span>THROW</span><b>J</b></button>''',
+              '''        <button class="action-button action-button--pass" data-action="pass" type="button"><span>PASS</span><b>I</b></button>\n        <button class="action-button action-button--dash" data-action="dash" type="button"><span>DASH</span><b>Ⅲ</b></button>\n        <button class="action-button action-button--throw" data-action="ball" type="button" aria-label="BALL catch or throw"><span>BALL</span><b>J</b></button>''',
+          )
+
+          replace(
+              "src/main.ts",
+              '''  const owner = snapshot.players.find((player) => player.id === snapshot.ball.ownerId);\n  if (ballStateLabel) ballStateLabel.textContent = `BALL // ${snapshot.ball.mode === "HELD" ? owner?.name ?? "READY" : snapshot.ball.kind}`;''',
+              '''  const owner = snapshot.players.find((player) => player.id === snapshot.ball.ownerId);\n  const aimTarget = snapshot.players.find((player) => player.id === snapshot.aimTargetId);\n  const warningThrower = snapshot.players.find((player) => player.id === snapshot.telegraph?.throwerId);\n  if (ballStateLabel) {\n    if (snapshot.telegraph?.source === "ENEMY") {\n      ballStateLabel.textContent = `WARNING // ${warningThrower?.name ?? "ENEMY"} ${snapshot.telegraph.secondsRemaining.toFixed(1)}s`;\n      ballStateLabel.dataset.mode = "warning";\n    } else if (snapshot.aimTargetId) {\n      ballStateLabel.textContent = `AIM // ${aimTarget?.name ?? "TARGET"} ${Math.round(snapshot.aimCharge * 100)}%`;\n      ballStateLabel.dataset.mode = "aim";\n    } else if (snapshot.telegraph?.source === "ASSIST") {\n      ballStateLabel.textContent = `ASSIST // ${warningThrower?.name ?? "TEAM"}`;\n      ballStateLabel.dataset.mode = "assist";\n    } else {\n      ballStateLabel.textContent = `BALL // ${snapshot.ball.mode === "HELD" ? owner?.name ?? "READY" : snapshot.ball.kind}`;\n      ballStateLabel.dataset.mode = "normal";\n    }\n  }''',
+          )
+
+          replace(
+              "src/styles.css",
+              '''.action-button--throw { width: clamp(76px, 13vw, 112px); height: clamp(58px, 10vw, 84px); border-color: rgba(255, 176, 106, .65); background: radial-gradient(circle, rgba(255, 142, 82, .28), rgba(31, 23, 41, .72)); color: #ffe0ab; grid-column: 2; }\n.action-button--catch { border-color: rgba(99, 232, 255, .6); color: #baf7ff; grid-column: 1; grid-row: 2; }''',
+              '''.action-button--throw { width: clamp(82px, 14vw, 118px); height: clamp(62px, 10.5vw, 88px); border-color: rgba(255, 176, 106, .78); background: radial-gradient(circle, rgba(255, 142, 82, .34), rgba(31, 23, 41, .76)); color: #ffe0ab; grid-column: 2; grid-row: 2; box-shadow: inset 0 0 22px rgba(255, 177, 95, .12), 0 0 18px rgba(255, 136, 91, .12); }''',
+          )
+
+          replace(
+              "src/styles.css",
+              '''.ball-state {''',
+              '''.ball-state[data-mode="warning"] { color: #ff7897; text-shadow: 0 0 10px rgba(255,84,125,.45); }\n.ball-state[data-mode="aim"] { color: #ffe5a6; text-shadow: 0 0 10px rgba(255,196,96,.35); }\n.ball-state[data-mode="assist"] { color: #d9b7ff; text-shadow: 0 0 10px rgba(196,132,255,.3); }\n.ball-state {''',
+          )
+
+          replace(
+              "src/game/webgl-demo.ts",
+              '''      visual.body.material.emissiveIntensity = player.stunSeconds > 0 ? 3.4 : 1.2;\n      visual.ring.material.opacity = player.stunSeconds > 0 ? 0.98 : 0.66;\n      visual.ring.scale.setScalar(player.stunSeconds > 0 ? 1.12 + Math.sin(snapshot.clockSeconds * 22) * 0.08 : 1);''',
+              '''      const isAimTarget = snapshot.aimTargetId === player.id;\n      const isTelegraphThrower = snapshot.telegraph?.throwerId === player.id;\n      const isTelegraphTarget = snapshot.telegraph?.targetId === player.id;\n      visual.body.material.emissiveIntensity = player.stunSeconds > 0 ? 3.4 : isTelegraphThrower ? 2.5 : isAimTarget ? 2.1 : 1.2;\n      visual.ring.material.color.setHex(isAimTarget ? 0xffd36a : isTelegraphThrower ? 0xff547d : isTelegraphTarget ? 0xffffff : TEAM_COLORS[player.team]);\n      visual.ring.material.opacity = player.stunSeconds > 0 || isAimTarget || isTelegraphThrower || isTelegraphTarget ? 0.98 : 0.66;\n      const tacticalPulse = isTelegraphThrower ? 1.22 + Math.sin(snapshot.clockSeconds * 18) * 0.13 : isAimTarget ? 1.16 + Math.sin(snapshot.clockSeconds * 12) * 0.08 : isTelegraphTarget ? 1.12 + Math.sin(snapshot.clockSeconds * 20) * 0.06 : 1;\n      visual.ring.scale.setScalar(player.stunSeconds > 0 ? 1.12 + Math.sin(snapshot.clockSeconds * 22) * 0.08 : tacticalPulse);''',
+          )
+
+          replace(
+              "src/game/simulation.ts",
+              '''    if (player.id === this.snapshotState.controlledPlayerId && this.snapshotState.ball.ownerId === player.id && input.ballHeld) {\n      speedScale *= 0.24;\n    }''',
+              '''    if (player.id === this.snapshotState.controlledPlayerId && this.snapshotState.ball.ownerId === player.id && input.ballHeld) {\n      speedScale *= 0.08;\n    }''',
+          )
+
+          Path("tests/input.test.ts").write_text('''import assert from "node:assert/strict";\nimport test from "node:test";\nimport { InputSystem } from "../src/game/input.ts";\nimport { directionVector, quantizeDirection, VirtualPadTracker } from "../src/game/virtual-pad.ts";\n\ntest("virtual pad quantizes eight directions with a dead zone", () => {\n  assert.equal(quantizeDirection(0, 0, 40), "NEUTRAL");\n  assert.equal(quantizeDirection(0, 40, 40), "UP");\n  assert.equal(quantizeDirection(0, -40, 40), "DOWN");\n  assert.equal(quantizeDirection(40, 0, 40), "RIGHT");\n  assert.equal(quantizeDirection(-30, -30, 40), "DOWN_LEFT");\n  assert.deepEqual(directionVector("UP_RIGHT"), { x: 0.707, z: 0.707 });\n});\n\ntest("virtual pad keeps vertical direction stable while crossing the diagonal boundaries", () => {\n  assert.equal(quantizeDirection(0.92, -0.39, 1, "RIGHT"), "RIGHT");\n  assert.equal(quantizeDirection(0.7, -0.72, 1, "RIGHT"), "DOWN_RIGHT");\n  assert.equal(quantizeDirection(0, -1, 1, "DOWN"), "DOWN");\n  assert.equal(quantizeDirection(0, 1, 1, "UP"), "UP");\n});\n\ntest("virtual pad tracks one pointer, supports continuous direction changes, and releases to neutral", () => {\n  const pad = new VirtualPadTracker();\n  assert.equal(pad.begin(7, 0, 40, 40), "UP");\n  assert.equal(pad.begin(8, 0, -40, 40), "UP");\n  assert.equal(pad.move(8, 0, -40, 40), "UP");\n  assert.equal(pad.move(7, 0, -40, 40), "DOWN");\n  pad.release(7);\n  assert.equal(pad.pointerId, null);\n  assert.equal(pad.direction, "NEUTRAL");\n});\n\ntest("BALL exposes press, hold, and release while movement remains held", () => {\n  const input = new InputSystem();\n  input.press("right", "pad");\n  input.press("ball", "button:ball");\n  const first = input.frame();\n  const held = input.frame();\n  input.release("ball", "button:ball");\n  const released = input.frame();\n  assert.equal(first.moveX, 1);\n  assert.equal(first.ballPressed, true);\n  assert.equal(first.ballHeld, true);\n  assert.equal(held.ballPressed, false);\n  assert.equal(held.ballHeld, true);\n  assert.equal(released.ballHeld, false);\n  assert.equal(released.ballReleased, true);\n});\n''')
+
+          Path("tests/simulation.test.ts").write_text('''import assert from "node:assert/strict";\nimport test from "node:test";\nimport { BattleBallSimulation } from "../src/game/simulation.ts";\nimport { EMPTY_INPUT, type InputFrame } from "../src/game/types.ts";\n\nconst ballDown: InputFrame = { ...EMPTY_INPUT, ballHeld: true, ballPressed: true };\nconst ballHeld: InputFrame = { ...EMPTY_INPUT, ballHeld: true };\nconst ballUp: InputFrame = { ...EMPTY_INPUT, ballReleased: true };\n\nfunction humanThrow(simulation: BattleBallSimulation, aimTicks = 18, moveX = 0): void {\n  simulation.step({ ...ballDown, moveX });\n  for (let tick = 0; tick < aimTicks; tick += 1) simulation.step({ ...ballHeld, moveX });\n  simulation.step({ ...ballUp, moveX });\n}\n\ntest("starts as a stable player-led 3v3 match with a held ball", () => {\n  const simulation = new BattleBallSimulation();\n  const snapshot = simulation.snapshot();\n  assert.equal(snapshot.phase, "PLAYING");\n  assert.equal(snapshot.players.length, 6);\n  assert.equal(snapshot.controlledPlayerId, "blue-0");\n  assert.equal(snapshot.ball.mode, "HELD");\n  assert.equal(snapshot.ball.ownerId, "blue-0");\n  assert.equal(snapshot.telegraph, null);\n});\n\ntest("CPU players do not create an autonomous rally while the player holds possession", () => {\n  const simulation = new BattleBallSimulation();\n  const observed = new Set<string>();\n  for (let tick = 0; tick < 600; tick += 1) {\n    simulation.step();\n    for (const event of simulation.snapshot().events) observed.add(event.kind);\n  }\n  assert.equal(observed.has("throw"), false);\n  assert.equal(observed.has("catch"), false);\n  assert.equal(simulation.snapshot().ball.ownerId, "blue-0");\n});\n\ntest("BALL hold selects a manual target and release throws", () => {\n  const simulation = new BattleBallSimulation();\n  simulation.step({ ...ballDown, moveX: 1 });\n  for (let tick = 0; tick < 24; tick += 1) simulation.step({ ...ballHeld, moveX: 1 });\n  const aimed = simulation.snapshot();\n  assert.equal(aimed.aimTargetId, "red-0");\n  assert.ok(aimed.aimCharge > 0.35);\n  simulation.step({ ...ballUp, moveX: 1 });\n  const thrown = simulation.snapshot();\n  assert.equal(thrown.ball.mode, "FLYING");\n  assert.equal(thrown.ball.throwerId, "blue-0");\n});\n\ntest("PASS delegates exactly one role-based assist attack", () => {\n  const simulation = new BattleBallSimulation();\n  simulation.step({ ...EMPTY_INPUT, passPressed: true, moveX: 1 });\n  const passed = simulation.snapshot();\n  assert.equal(passed.telegraph?.source, "ASSIST");\n  assert.equal(passed.ball.ownerId, "blue-2");\n  let assistThrows = 0;\n  for (let tick = 0; tick < 120; tick += 1) {\n    simulation.step();\n    assistThrows += simulation.snapshot().events.filter((event) => event.kind === "throw" && event.actorId?.startsWith("blue-") && event.actorId !== "blue-0").length;\n  }\n  assert.equal(assistThrows, 1);\n});\n\ntest("enemy possession always enters a readable telegraph before a return throw", () => {\n  const simulation = new BattleBallSimulation();\n  humanThrow(simulation, 0);\n  let telegraphSeen = false;\n  let enemyThrowSeen = false;\n  for (let tick = 0; tick < 600; tick += 1) {\n    simulation.step();\n    const snapshot = simulation.snapshot();\n    if (snapshot.telegraph?.source === "ENEMY") telegraphSeen = true;\n    if (snapshot.events.some((event) => event.kind === "throw" && event.actorId?.startsWith("red-"))) {\n      enemyThrowSeen = true;\n      assert.equal(telegraphSeen, true);\n      break;\n    }\n  }\n  assert.equal(enemyThrowSeen, true);\n});\n\ntest("the same fixed input sequence produces the same snapshot", () => {\n  const first = new BattleBallSimulation();\n  const second = new BattleBallSimulation();\n  for (let tick = 0; tick < 180; tick += 1) {\n    const input = tick === 0 ? ballDown : tick < 18 ? ballHeld : tick === 18 ? ballUp : EMPTY_INPUT;\n    first.step(input);\n    second.step(input);\n  }\n  assert.deepEqual(first.snapshot(), second.snapshot());\n});\n\ntest("reset returns the simulation to tick zero", () => {\n  const simulation = new BattleBallSimulation();\n  humanThrow(simulation, 4);\n  simulation.reset();\n  const snapshot = simulation.snapshot();\n  assert.equal(snapshot.tick, 0);\n  assert.equal(snapshot.clockSeconds, 0);\n  assert.equal(snapshot.ball.ownerId, "blue-0");\n  assert.equal(snapshot.events.length, 0);\n});\n''')
+
+          replace(
+              "README.md",
+              '''- Left virtual pad: move\n- THROW: release the ball toward the nearest opponent\n- CATCH: catch an incoming ball during the timing window\n- DASH: short invulnerable burst\n- PASS: pass to the nearest teammate\n\nKeyboard fallback: WASD / arrow keys, `J` throw, `K` catch, `L` dash, `I` pass.''',
+              '''- Left virtual pad: move; while holding BALL, tilt it to choose a target\n- BALL: tap on an incoming ball to catch; hold while possessing to aim, release to throw\n- DASH: short invulnerable burst\n- PASS: delegate one role-based assist attack to a teammate\n\nKeyboard fallback: WASD / arrow keys, `J` or `K` BALL, `L` dash, `I` pass.''',
+          )
+
+          replace(
+              "scripts/webgl-audit.mjs",
+              '''const throwButton = page.getByRole("button", { name: /THROW J/i });\nawait throwButton.click();''',
+              '''const ballButton = page.getByRole("button", { name: /BALL catch or throw/i });\nawait ballButton.click();''',
+          )
+
+          replace("public/sw.js", 'const CACHE_VERSION = "v3";', 'const CACHE_VERSION = "v4";')
+
+          replace(
+              ".github/workflows/webgl-audit.yml",
+              '''      - "scripts/webgl-audit.mjs"\n      - ".github/workflows/webgl-audit.yml"''',
+              '''      - "src/**"\n      - "tests/**"\n      - "public/**"\n      - "README.md"\n      - "scripts/webgl-audit.mjs"\n      - ".github/workflows/webgl-audit.yml"''',
+          )
+          PY
+
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - run: git diff --check
+
+      - name: Commit validated implementation
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src tests README.md scripts/webgl-audit.mjs public/sw.js .github/workflows/webgl-audit.yml
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          git commit -m "Implement player-led dodgeball rally"
+          git push origin HEAD:chatgpt/player-led-rally
