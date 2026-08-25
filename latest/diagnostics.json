@@ -1,0 +1,30 @@
+{
+  "capturedAt": "2026-08-25T08:57:46.228Z",
+  "webgl": {
+    "ok": true,
+    "width": 1688,
+    "height": 780,
+    "clientWidth": 844,
+    "clientHeight": 390,
+    "vendor": "Google Inc. (Google)",
+    "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)"
+  },
+  "diagnostics": {
+    "url": "https://battle-ball.yzgame.chatgpt.site/",
+    "title": "BATTLE BALL",
+    "canvas": {
+      "width": 1688,
+      "height": 780,
+      "clientWidth": 844,
+      "clientHeight": 390
+    },
+    "clock": "00:04",
+    "matchLabel": "LOCAL // 3v3",
+    "startHidden": true,
+    "pauseVisible": true,
+    "blueAlive": "3 / 3",
+    "redAlive": "3 / 3",
+    "consoleErrors": [],
+    "pageErrors": []
+  }
+}
