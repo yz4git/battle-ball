@@ -37,7 +37,7 @@ app.innerHTML = `
     <section class="team-hud team-hud--blue" aria-label="Blue team status">
       <div class="team-heading"><span class="team-dot"></span><span>BLUE UNIT</span><strong id="blue-alive">3 / 3</strong></div>
       <div class="team-hp"><i id="blue-hp"></i></div>
-      <span class="team-note">BALL = CATCH / AIM / THROW</span>
+      <span class="team-note">CATCH / DASH → COUNTER</span>
     </section>
     <section class="team-hud team-hud--red" aria-label="Red team status">
       <div class="team-heading"><span class="team-dot"></span><span>RED UNIT</span><strong id="red-alive">3 / 3</strong></div>
@@ -64,7 +64,7 @@ app.innerHTML = `
       <div class="screen-card">
         <span class="screen-eyebrow">DODGEBALL / PLAYER LED</span>
         <h1>OWN THE<br><em>RALLY.</em></h1>
-        <p>BALL長押しで敵を狙い、離して投球。飛んできた球にはBALLタップでキャッチ。PASSすると味方が役割別の一撃だけを放つ。</p>
+        <p>敵の予告を読み、BALLでキャッチかDASHで奪取。成功するほどRALLYが伸び、直後のカウンターが高速・高威力になる。PASSはRALLYを味方の必殺攻撃へ変換。</p>
         <button id="start-button" class="primary-button" type="button"><span>ENTER ARENA</span><b>→</b></button>
         <div class="screen-foot"><span>LANDSCAPE / IPHONE READY</span><span>LOCAL 3v3</span></div>
       </div>
@@ -165,6 +165,12 @@ function updateHud(snapshot: MatchSnapshot): void {
   };
   const blue = teamStats("blue");
   const red = teamStats("red");
+  const controlled = snapshot.players.find((player) => player.id === snapshot.controlledPlayerId);
+  if (matchLabel && !matchLabel.classList.contains("is-fallback")) {
+    matchLabel.textContent = controlled && controlled.combo > 0
+      ? `RALLY x${controlled.combo} // ${snapshot.momentum >= 80 ? "SURGE" : "COUNTER UP"}`
+      : "PLAYER LED // 3v3";
+  }
   if (blueAlive) blueAlive.textContent = `${blue.alive} / 3`;
   if (redAlive) redAlive.textContent = `${red.alive} / 3`;
   if (blueHp) blueHp.style.width = `${(blue.hp / blue.maxHp) * 100}%`;
@@ -360,6 +366,22 @@ document.addEventListener("visibilitychange", () => {
 });
 window.addEventListener("pagehide", resetPad);
 window.addEventListener("contextmenu", (event) => event.preventDefault());
+
+// Safari can still interpret rapid action taps as browser zoom. Block native zoom globally.
+const blockNativeZoom = (event: Event): void => event.preventDefault();
+document.addEventListener("gesturestart", blockNativeZoom, { passive: false });
+document.addEventListener("gesturechange", blockNativeZoom, { passive: false });
+document.addEventListener("gestureend", blockNativeZoom, { passive: false });
+document.addEventListener("touchmove", (event) => {
+  if (event.touches.length > 1) event.preventDefault();
+}, { passive: false });
+let lastTouchEndAt = 0;
+document.addEventListener("touchend", (event) => {
+  const now = performance.now();
+  if (now - lastTouchEndAt < 320) event.preventDefault();
+  lastTouchEndAt = now;
+}, { passive: false, capture: true });
+document.addEventListener("dblclick", blockNativeZoom, { passive: false });
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
