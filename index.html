@@ -8,9 +8,69 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" href="/icon.svg" type="image/svg+xml" />
     <title>BATTLE BALL</title>
+    <style>
+      html, body, #app { margin: 0; width: 100%; height: 100%; min-height: 100%; background: #080d1c; }
+      body { overflow: hidden; color: #eef8ff; font-family: Arial, Helvetica, sans-serif; }
+      .boot-fallback { position: fixed; inset: 0; display: grid; place-items: center; padding: 24px; background: radial-gradient(circle at 50% 42%, #18304c 0%, #080d1c 58%, #03050c 100%); text-align: center; }
+      .boot-fallback__card { width: min(420px, 86vw); padding: 28px 24px; border: 1px solid rgba(129, 220, 255, .35); background: rgba(4, 11, 24, .82); box-shadow: 0 20px 60px rgba(0,0,0,.35); }
+      .boot-fallback strong { display: block; font-size: clamp(28px, 8vw, 52px); letter-spacing: -.04em; }
+      .boot-fallback span { display: block; margin-top: 10px; color: #7de7ff; font-size: 11px; letter-spacing: .18em; }
+      .boot-fallback button { display: none; width: 100%; margin-top: 20px; padding: 14px 18px; border: 1px solid rgba(255,255,255,.5); background: #d72a47; color: white; font: 800 13px/1 Arial, sans-serif; letter-spacing: .14em; touch-action: manipulation; }
+      .boot-fallback.is-error button { display: block; }
+    </style>
   </head>
   <body>
-    <main id="app" aria-label="BATTLE BALL game"></main>
+    <main id="app" aria-label="BATTLE BALL game">
+      <div id="boot-fallback" class="boot-fallback" role="status" aria-live="polite">
+        <div class="boot-fallback__card">
+          <strong>BATTLE BALL</strong>
+          <span id="boot-status">LOADING ARENA...</span>
+          <button id="boot-retry" type="button">CLEAR CACHE &amp; RETRY</button>
+        </div>
+      </div>
+    </main>
+    <script>
+      (() => {
+        const recoveryKey = "battle-ball-boot-recovered-v7";
+        const clearBattleBallCaches = async () => {
+          try {
+            if ("serviceWorker" in navigator) {
+              const registrations = await navigator.serviceWorker.getRegistrations();
+              await Promise.all(registrations.map((registration) => registration.unregister()));
+            }
+            if ("caches" in window) {
+              const keys = await caches.keys();
+              await Promise.all(keys.filter((key) => key.startsWith("battle-ball-")).map((key) => caches.delete(key)));
+            }
+          } catch {
+            // Recovery must continue even when storage APIs are restricted.
+          }
+        };
+        const showFailure = async () => {
+          if (document.querySelector(".game-shell")) return;
+          let recovered = false;
+          try { recovered = sessionStorage.getItem(recoveryKey) === "1"; } catch { recovered = true; }
+          if (!recovered) {
+            try { sessionStorage.setItem(recoveryKey, "1"); } catch { /* ignore */ }
+            await clearBattleBallCaches();
+            location.reload();
+            return;
+          }
+          const fallback = document.getElementById("boot-fallback");
+          const status = document.getElementById("boot-status");
+          fallback?.classList.add("is-error");
+          if (status) status.textContent = "LOAD ERROR // RETRY";
+        };
+        document.getElementById("boot-retry")?.addEventListener("click", async () => {
+          try { sessionStorage.removeItem(recoveryKey); } catch { /* ignore */ }
+          await clearBattleBallCaches();
+          location.reload();
+        });
+        window.addEventListener("unhandledrejection", () => window.setTimeout(showFailure, 0), { once: true });
+        window.addEventListener("error", () => window.setTimeout(showFailure, 250), { once: true });
+        window.setTimeout(showFailure, 5000);
+      })();
+    </script>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
