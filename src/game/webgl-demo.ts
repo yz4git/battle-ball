@@ -90,7 +90,10 @@ export class BattleBallWebGLDemo implements BattleBallRuntime {
     this.canvas.addEventListener("webglcontextlost", this.onContextLost, { passive: false });
     this.scene.background = new THREE.Color(0x050a19);
     this.scene.fog = new THREE.Fog(0x050a19, 22, 52);
-    this.camera.position.set(0, 16.8, 18.8);
+    // Keep +Z aligned with the top of the arena and the virtual pad.
+    // Looking from -Z makes WebGL match the Canvas projection and avoids
+    // making the player's UP input move down the screen.
+    this.camera.position.set(0, 16.8, -18.8);
     this.camera.lookAt(0, 0, 0);
     this.createLights();
     this.createArena();
@@ -414,7 +417,7 @@ export class BattleBallWebGLDemo implements BattleBallRuntime {
     const shakeX = this.cameraShake * Math.sin(snapshot.tick * 1.7) * 0.7;
     const shakeY = this.cameraShake * Math.cos(snapshot.tick * 2.1) * 0.45;
     const desiredX = snapshot.ball.position.x * 0.12 + shakeX;
-    const desiredZ = 18.8 + snapshot.ball.position.z * 0.035;
+    const desiredZ = -18.8 + snapshot.ball.position.z * 0.035;
     this.camera.position.x = THREE.MathUtils.lerp(this.camera.position.x, desiredX, 0.06);
     this.camera.position.y = THREE.MathUtils.lerp(this.camera.position.y, 16.8 + shakeY, 0.08);
     this.camera.position.z = THREE.MathUtils.lerp(this.camera.position.z, desiredZ, 0.06);
