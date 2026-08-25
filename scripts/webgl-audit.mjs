@@ -70,7 +70,7 @@ await pauseButton.click();
 await page.getByRole("button", { name: /RESUME/i }).waitFor({ state: "visible", timeout: 5_000 });
 await page.screenshot({ path: `${outputDir}/03-webgl-pause.png`, fullPage: true });
 
-const diagnostics = await page.evaluate(() => ({
+const pageDiagnostics = await page.evaluate(() => ({
   url: location.href,
   title: document.title,
   canvas: (() => {
@@ -83,9 +83,8 @@ const diagnostics = await page.evaluate(() => ({
   pauseVisible: !document.querySelector("#pause-screen")?.hasAttribute("hidden"),
   blueAlive: document.querySelector("#blue-alive")?.textContent ?? null,
   redAlive: document.querySelector("#red-alive")?.textContent ?? null,
-  consoleErrors,
-  pageErrors,
 }));
+const diagnostics = { ...pageDiagnostics, consoleErrors, pageErrors };
 await writeFile(`${outputDir}/diagnostics.json`, JSON.stringify({ capturedAt: new Date().toISOString(), webgl, diagnostics }, null, 2));
 if (pageErrors.length) throw new Error(`Page errors during WebGL audit: ${pageErrors.join(" | ")}`);
 await browser.close();
