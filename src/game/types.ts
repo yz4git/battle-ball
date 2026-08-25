@@ -3,6 +3,7 @@ export type PlayerRole = "POWER" | "SPEED" | "TRICK";
 export type ThrowKind = "STRAIGHT" | "CURVE" | "SKY" | "RUSH";
 export type BallMode = "HELD" | "FLYING" | "FREE";
 export type MatchPhase = "PLAYING" | "BLUE_WIN" | "RED_WIN";
+export type TelegraphSource = "ENEMY" | "ASSIST";
 
 export interface Vec2 {
   x: number;
@@ -12,8 +13,9 @@ export interface Vec2 {
 export interface InputFrame {
   moveX: number;
   moveZ: number;
-  throwPressed: boolean;
-  catchPressed: boolean;
+  ballHeld: boolean;
+  ballPressed: boolean;
+  ballReleased: boolean;
   dashPressed: boolean;
   passPressed: boolean;
 }
@@ -21,8 +23,9 @@ export interface InputFrame {
 export const EMPTY_INPUT: InputFrame = {
   moveX: 0,
   moveZ: 0,
-  throwPressed: false,
-  catchPressed: false,
+  ballHeld: false,
+  ballPressed: false,
+  ballReleased: false,
   dashPressed: false,
   passPressed: false,
 };
@@ -59,8 +62,18 @@ export interface BallState {
   velocity: Vec2;
   kind: ThrowKind;
   age: number;
+  heldSeconds: number;
   damage: number;
   bounces: number;
+}
+
+export interface ThrowTelegraph {
+  source: TelegraphSource;
+  throwerId: string;
+  targetId: string;
+  kind: ThrowKind;
+  secondsRemaining: number;
+  totalSeconds: number;
 }
 
 export type SimEventKind = "throw" | "catch" | "pass" | "hit" | "dodge" | "dash" | "ko" | "win";
@@ -82,6 +95,10 @@ export interface MatchSnapshot {
   phase: MatchPhase;
   clockSeconds: number;
   momentum: number;
+  controlledPlayerId: string;
+  aimTargetId: string | null;
+  aimCharge: number;
+  telegraph: ThrowTelegraph | null;
   players: PlayerState[];
   ball: BallState;
   events: SimEvent[];

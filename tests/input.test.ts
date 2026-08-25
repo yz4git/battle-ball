@@ -30,23 +30,29 @@ test("virtual pad tracks one pointer, supports continuous direction changes, and
   assert.equal(pad.direction, "NEUTRAL");
 });
 
-test("input edges fire once and movement remains held", () => {
+test("BALL exposes held, press, and release while movement remains held", () => {
   const input = new InputSystem();
   input.press("right", "pad");
-  input.press("throw", "button:throw");
+  input.press("ball", "button:ball");
   const first = input.frame();
   const second = input.frame();
   assert.equal(first.moveX, 1);
-  assert.equal(first.throwPressed, true);
-  assert.equal(second.moveX, 1);
-  assert.equal(second.throwPressed, false);
-  input.release("throw", "button:throw");
+  assert.equal(first.ballHeld, true);
+  assert.equal(first.ballPressed, true);
+  assert.equal(first.ballReleased, false);
+  assert.equal(second.ballHeld, true);
+  assert.equal(second.ballPressed, false);
+  input.release("ball", "button:ball");
+  const released = input.frame();
+  assert.equal(released.ballHeld, false);
+  assert.equal(released.ballReleased, true);
   input.release("right", "pad");
   assert.deepEqual(input.frame(), {
     moveX: 0,
     moveZ: 0,
-    throwPressed: false,
-    catchPressed: false,
+    ballHeld: false,
+    ballPressed: false,
+    ballReleased: false,
     dashPressed: false,
     passPressed: false,
   });

@@ -3,13 +3,12 @@ import { BattleBallCanvasDemo } from "./game/canvas-demo.ts";
 import type { InputAction } from "./game/input.ts";
 import { BattleBallWebGLDemo } from "./game/webgl-demo.ts";
 import { directionVector, VirtualPadTracker, type DigitalDirection } from "./game/virtual-pad.ts";
-import { registerBattleBallServiceWorker } from "./service-worker-registration.ts";
 import type { BattleBallRuntime, GameRuntimeCallbacks } from "./game/runtime.ts";
-import type { MatchSnapshot, PlayerState, TeamId } from "./game/types.ts";
+import type { MatchSnapshot, TeamId } from "./game/types.ts";
 
 const appElement = document.querySelector<HTMLElement>("#app");
 if (!appElement) throw new Error("BATTLE BALL mount is missing");
-const app: HTMLElement = appElement;
+const app = appElement;
 
 app.innerHTML = `
   <div class="game-shell">
@@ -19,11 +18,11 @@ app.innerHTML = `
 
     <header class="hud">
       <div class="brand-lockup">
-        <span class="brand-kicker">ARCADE PROTOCOL 01</span>
+        <span class="brand-kicker">ARCADE PROTOCOL 02</span>
         <strong class="brand-title">BATTLE <i>BALL</i></strong>
       </div>
       <div class="match-core">
-        <span id="match-label" class="match-label">LOCAL // 3v3</span>
+        <span id="match-label" class="match-label">PLAYER LED // 3v3</span>
         <strong id="match-clock" class="match-clock">00:00</strong>
         <div class="momentum-track" aria-label="Momentum">
           <span class="momentum-blue"></span>
@@ -38,35 +37,34 @@ app.innerHTML = `
     <section class="team-hud team-hud--blue" aria-label="Blue team status">
       <div class="team-heading"><span class="team-dot"></span><span>BLUE UNIT</span><strong id="blue-alive">3 / 3</strong></div>
       <div class="team-hp"><i id="blue-hp"></i></div>
-      <span class="team-note">CATCH &amp; COUNTER</span>
+      <span class="team-note">BALL = CATCH / AIM / THROW</span>
     </section>
     <section class="team-hud team-hud--red" aria-label="Red team status">
       <div class="team-heading"><span class="team-dot"></span><span>RED UNIT</span><strong id="red-alive">3 / 3</strong></div>
       <div class="team-hp"><i id="red-hp"></i></div>
-      <span class="team-note">PRESSURE MODE</span>
+      <span class="team-note">WATCH THE TELEGRAPH</span>
     </section>
 
     <div id="event-feed" class="event-feed" aria-live="polite"></div>
     <div id="callout" class="callout" aria-live="polite"></div>
 
     <div class="touch-controls" aria-label="Touch controls">
-      <div id="virtual-pad" class="virtual-pad" aria-label="Move">
+      <div id="virtual-pad" class="virtual-pad" aria-label="Move or aim">
         <div class="pad-ring"><div class="pad-knob"></div></div>
-        <span class="pad-caption">MOVE</span>
+        <span class="pad-caption">MOVE / AIM</span>
       </div>
       <div class="action-cluster">
         <button class="action-button action-button--pass" data-action="pass" type="button"><span>PASS</span><b>I</b></button>
-        <button class="action-button action-button--dash" data-action="dash" type="button"><span>DASH</span><b>Ⅲ</b></button>
-        <button class="action-button action-button--catch" data-action="catch" type="button"><span>CATCH</span><b>K</b></button>
-        <button class="action-button action-button--throw" data-action="throw" type="button"><span>THROW</span><b>J</b></button>
+        <button class="action-button action-button--dash" data-action="dash" type="button"><span>DASH</span><b>L</b></button>
+        <button class="action-button action-button--throw" data-action="ball" type="button"><span>BALL</span><b>J/K</b></button>
       </div>
     </div>
 
     <section id="start-screen" class="screen screen--start">
       <div class="screen-card">
-        <span class="screen-eyebrow">DODGEBALL / REWIRED</span>
-        <h1>READ THE<br><em>RHYTHM.</em></h1>
-        <p>キャッチで流れを奪い、投げ返して一気に決めろ。<br>3人の役割を使い分け、相手の最後の一人を倒せ。</p>
+        <span class="screen-eyebrow">DODGEBALL / PLAYER LED</span>
+        <h1>OWN THE<br><em>RALLY.</em></h1>
+        <p>BALL長押しで敵を狙い、離して投球。飛んできた球にはBALLタップでキャッチ。PASSすると味方が役割別の一撃だけを放つ。</p>
         <button id="start-button" class="primary-button" type="button"><span>ENTER ARENA</span><b>→</b></button>
         <div class="screen-foot"><span>LANDSCAPE / IPHONE READY</span><span>LOCAL 3v3</span></div>
       </div>
@@ -75,7 +73,7 @@ app.innerHTML = `
     <section id="pause-screen" class="screen screen--pause" hidden>
       <div class="screen-card screen-card--compact">
         <span class="screen-eyebrow">MATCH PAUSED</span>
-        <h2>TAKE A<br><em>BREATH.</em></h2>
+        <h2>HOLD THE<br><em>RHYTHM.</em></h2>
         <button id="resume-button" class="primary-button" type="button"><span>RESUME</span><b>→</b></button>
       </div>
     </section>
@@ -84,7 +82,7 @@ app.innerHTML = `
       <div class="screen-card screen-card--compact">
         <span id="result-eyebrow" class="screen-eyebrow">MATCH COMPLETE</span>
         <h2 id="result-title">BLUE<br><em>WINS.</em></h2>
-        <p id="result-copy">Momentum belongs to the team that caught the moment.</p>
+        <p id="result-copy">You controlled the rally.</p>
         <button id="rematch-button" class="primary-button" type="button"><span>REMATCH</span><b>↻</b></button>
       </div>
     </section>
@@ -96,7 +94,6 @@ app.innerHTML = `
 const canvasElement = app.querySelector<HTMLCanvasElement>("#game-canvas");
 if (!canvasElement) throw new Error("BATTLE BALL canvas is missing");
 const canvas: HTMLCanvasElement = canvasElement;
-
 const startScreen = app.querySelector<HTMLElement>("#start-screen");
 const pauseScreen = app.querySelector<HTMLElement>("#pause-screen");
 const resultScreen = app.querySelector<HTMLElement>("#result-screen");
@@ -122,6 +119,7 @@ let matchStarted = false;
 let isPaused = true;
 let usedCanvasFallback = false;
 let feedEvents: { id: number; label: string; kind: string }[] = [];
+let lastTelegraphKey = "";
 
 const callbacks: GameRuntimeCallbacks = {
   onSnapshot: updateHud,
@@ -152,6 +150,10 @@ function switchToCanvasFallback(): void {
   }
 }
 
+function playerName(snapshot: MatchSnapshot, id: string | null): string {
+  return snapshot.players.find((player) => player.id === id)?.name ?? "?";
+}
+
 function updateHud(snapshot: MatchSnapshot): void {
   const teamStats = (team: TeamId) => {
     const players = snapshot.players.filter((player) => player.team === team);
@@ -167,22 +169,44 @@ function updateHud(snapshot: MatchSnapshot): void {
   if (redAlive) redAlive.textContent = `${red.alive} / 3`;
   if (blueHp) blueHp.style.width = `${(blue.hp / blue.maxHp) * 100}%`;
   if (redHp) redHp.style.width = `${(red.hp / red.maxHp) * 100}%`;
-  if (momentumFill) {
-    momentumFill.style.width = `${Math.max(2, Math.min(98, snapshot.momentum))}%`;
-  }
+  if (momentumFill) momentumFill.style.width = `${Math.max(2, Math.min(98, snapshot.momentum))}%`;
   if (clockLabel) clockLabel.textContent = formatClock(snapshot.clockSeconds);
-  const owner = snapshot.players.find((player) => player.id === snapshot.ball.ownerId);
-  if (ballStateLabel) ballStateLabel.textContent = `BALL // ${snapshot.ball.mode === "HELD" ? owner?.name ?? "READY" : snapshot.ball.kind}`;
-  if (snapshot.phase !== "PLAYING" && matchStarted && resultScreen?.hidden) showResult(snapshot);
 
+  const owner = snapshot.players.find((player) => player.id === snapshot.ball.ownerId);
+  if (ballStateLabel) {
+    if (snapshot.telegraph?.source === "ENEMY") {
+      const progress = 1 - snapshot.telegraph.secondsRemaining / snapshot.telegraph.totalSeconds;
+      ballStateLabel.textContent = `WARNING // ${playerName(snapshot, snapshot.telegraph.throwerId)} → YOU ${Math.round(progress * 100)}%`;
+    } else if (snapshot.telegraph?.source === "ASSIST") {
+      ballStateLabel.textContent = `ASSIST // ${playerName(snapshot, snapshot.telegraph.throwerId)} → ${playerName(snapshot, snapshot.telegraph.targetId)}`;
+    } else if (snapshot.aimTargetId) {
+      ballStateLabel.textContent = `TARGET // ${playerName(snapshot, snapshot.aimTargetId)} ${Math.round(snapshot.aimCharge * 100)}%`;
+    } else {
+      ballStateLabel.textContent = `BALL // ${snapshot.ball.mode === "HELD" ? owner?.name ?? "READY" : snapshot.ball.kind}`;
+    }
+  }
+
+  const telegraphKey = snapshot.telegraph ? `${snapshot.telegraph.source}:${snapshot.telegraph.throwerId}:${snapshot.telegraph.targetId}` : "";
+  if (telegraphKey && telegraphKey !== lastTelegraphKey && callout) {
+    callout.textContent = snapshot.telegraph?.source === "ENEMY"
+      ? `INCOMING // ${snapshot.telegraph.kind}`
+      : `${playerName(snapshot, snapshot.telegraph?.throwerId ?? null)} ASSIST`;
+    callout.dataset.kind = snapshot.telegraph?.source === "ENEMY" ? "hit" : "pass";
+    callout.classList.remove("is-live");
+    void callout.offsetWidth;
+    callout.classList.add("is-live");
+  }
+  lastTelegraphKey = telegraphKey;
+
+  if (snapshot.phase !== "PLAYING" && matchStarted && resultScreen?.hidden) showResult(snapshot);
   const newEvents = snapshot.events.filter((event) => !feedEvents.some((known) => known.id === event.id));
   if (newEvents.length > 0) {
     feedEvents = [...feedEvents, ...newEvents.map((event) => ({ id: event.id, label: event.label, kind: event.kind }))].slice(-4);
     renderFeed();
-    const headline = newEvents[newEvents.length - 1]?.label;
-    if (headline && callout) {
-      callout.textContent = headline;
-      callout.dataset.kind = newEvents[newEvents.length - 1]?.kind ?? "";
+    const latest = newEvents[newEvents.length - 1];
+    if (latest && callout) {
+      callout.textContent = latest.label;
+      callout.dataset.kind = latest.kind;
       callout.classList.remove("is-live");
       void callout.offsetWidth;
       callout.classList.add("is-live");
@@ -202,7 +226,7 @@ function showResult(snapshot: MatchSnapshot): void {
   const resultTitle = app.querySelector<HTMLElement>("#result-title");
   const resultCopy = app.querySelector<HTMLElement>("#result-copy");
   if (resultTitle) resultTitle.innerHTML = `${blueWon ? "BLUE" : "RED"}<br><em>WINS.</em>`;
-  if (resultCopy) resultCopy.textContent = blueWon ? "キャッチから始まった逆転。BLUE UNITが流れを制した。" : "最後まで押し切った。RED UNITがアリーナを支配した。";
+  if (resultCopy) resultCopy.textContent = blueWon ? "狙い、受け、味方を使ってラリーを支配した。" : "相手の予告を読み切れず、主導権を奪われた。";
   if (resultScreen) resultScreen.hidden = false;
 }
 
@@ -243,6 +267,7 @@ function togglePause(): void {
 
 function rematch(): void {
   feedEvents = [];
+  lastTelegraphKey = "";
   renderFeed();
   resetPad();
   runtime?.reset();
@@ -335,7 +360,11 @@ document.addEventListener("visibilitychange", () => {
 });
 window.addEventListener("pagehide", resetPad);
 window.addEventListener("contextmenu", (event) => event.preventDefault());
-registerBattleBallServiceWorker();
 
-// Keeps the first HUD frame useful even before the first animation callback.
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    void navigator.serviceWorker.register("/sw.js").catch(() => undefined);
+  }, { once: true });
+}
+
 if (runtime) updateHud(runtime.snapshot());

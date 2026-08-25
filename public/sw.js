@@ -1,5 +1,5 @@
 const CACHE_PREFIX = "battle-ball-";
-const CACHE_VERSION = "v3";
+const CACHE_VERSION = "v4-player-led-rally";
 const CACHE_NAME = `${CACHE_PREFIX}${CACHE_VERSION}`;
 const APP_SHELL = ["/", "/manifest.webmanifest", "/icon.svg"];
 

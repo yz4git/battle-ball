@@ -1,14 +1,17 @@
 # BATTLE BALL
 
-`BATTLE BALL` is a mobile-first 3D action game built around the strongest parts of classic dodgeball action:
+`BATTLE BALL` is a mobile-first 3D dodgeball action game built around player-controlled rallies rather than CPU-vs-CPU exchanges.
 
-- damage instead of instant elimination;
-- high-risk catch and immediate counterattack;
-- contextual special throws;
-- readable character roles and short matches;
-- fixed-step simulation that can later be driven by network input.
+Core rules in the current 3v3 slice:
 
-The first playable slice is a local 3v3 CPU match. The simulation is deliberately kept independent from Three.js and the DOM so an authoritative server or relay transport can be added later without rewriting combat rules.
+- one player-controlled Blue fighter drives the rally;
+- CPU teammates do not start autonomous throw/catch loops;
+- one `BALL` input handles both catching and throwing;
+- hold `BALL` to aim, use the left pad to choose a target, then release to throw;
+- enemy possession always enters a visible telegraph before the enemy throws at the player;
+- `PASS` delegates exactly one role-specific assist attack to a teammate;
+- damage replaces instant elimination and matches remain short;
+- fixed-step simulation remains independent from Three.js and the DOM for future network play.
 
 ## Commands
 
@@ -21,14 +24,13 @@ npm run build
 
 ## Controls
 
-- Left virtual pad: move
-- THROW: release the ball toward the nearest opponent
-- CATCH: catch an incoming ball during the timing window
-- DASH: short invulnerable burst
-- PASS: pass to the nearest teammate
+- Left virtual pad: move; while holding `BALL`, choose the target
+- `BALL`: tap an incoming ball to catch / hold while possessing the ball to aim / release to throw
+- `DASH`: short invulnerable burst
+- `PASS`: send the ball to a teammate for one role-specific assist attack
 
-Keyboard fallback: WASD / arrow keys, `J` throw, `K` catch, `L` dash, `I` pass.
+Keyboard fallback: WASD / arrow keys, `J` or `K` for BALL, `L` for dash, `I` for pass.
 
 ## Network-ready boundary
 
-`src/game/simulation.ts` owns deterministic match rules. `src/game/netcode.ts` defines ticked input and snapshot messages. The current game uses a local transport, but the future online mode can send `InputCommand` packets to an authoritative match room and broadcast snapshots or compact event deltas.
+`src/game/simulation.ts` owns deterministic match rules. `src/game/netcode.ts` defines ticked input and snapshot messages. The current game uses a local transport, but a future online mode can send `InputCommand` packets to an authoritative match room and broadcast snapshots or compact event deltas.
