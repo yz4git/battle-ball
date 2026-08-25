@@ -25,7 +25,9 @@ jobs:
           cache: npm
 
       - name: Apply gameplay patch
-        run: python scripts/gameplay-rally-v2.py
+        run: |
+          sed -i 's/gap < 1.82/gap < 2.6/' scripts/gameplay-rally-v2.py
+          python scripts/gameplay-rally-v2.py
 
       - name: Install
         run: npm ci
