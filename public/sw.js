@@ -1,48 +1,22 @@
 const CACHE_PREFIX = "battle-ball-";
-const CACHE_VERSION = "v6-break-steal";
-const CACHE_NAME = `${CACHE_PREFIX}${CACHE_VERSION}`;
-const APP_SHELL = ["/", "/manifest.webmanifest", "/icon.svg"];
+const CACHE_VERSION = "v7-startup-safe";
 
-self.addEventListener("install", (event) => {
-  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)));
+self.addEventListener("install", () => {
   self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches.keys().then((keys) => Promise.all(
-      keys.filter((key) => key.startsWith(CACHE_PREFIX) && key !== CACHE_NAME).map((key) => caches.delete(key)),
-    )),
+    caches.keys()
+      .then((keys) => Promise.all(keys.filter((key) => key.startsWith(CACHE_PREFIX)).map((key) => caches.delete(key))))
+      .then(() => self.clients.claim()),
   );
-  self.clients.claim();
 });
 
 self.addEventListener("message", (event) => {
   if (event.data?.type === "SKIP_WAITING") self.skipWaiting();
 });
 
-self.addEventListener("fetch", (event) => {
-  if (event.request.method !== "GET") return;
-  const url = new URL(event.request.url);
-  if (url.origin !== self.location.origin) return;
-
-  const acceptsHtml = event.request.headers.get("accept")?.includes("text/html") ?? false;
-  if (event.request.mode === "navigate" || acceptsHtml) {
-    event.respondWith(
-      fetch(event.request, { cache: "no-store" })
-        .then((response) => {
-          if (response.ok) void caches.open(CACHE_NAME).then((cache) => cache.put("/", response.clone()));
-          return response;
-        })
-        .catch(() => caches.match("/")),
-    );
-    return;
-  }
-
-  event.respondWith(
-    caches.match(event.request).then((cached) => cached ?? fetch(event.request).then((response) => {
-      if (response.ok) void caches.open(CACHE_NAME).then((cache) => cache.put(event.request, response.clone()));
-      return response;
-    })),
-  );
-});
+// Intentionally no fetch handler. Reliability on iPhone Safari is more important
+// than offline runtime caching for this build; HTML/JS/CSS always come from the network.
+void CACHE_VERSION;
