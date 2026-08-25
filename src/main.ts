@@ -91,8 +91,9 @@ app.innerHTML = `
   </div>
 `;
 
-const canvas = app.querySelector<HTMLCanvasElement>("#game-canvas");
-if (!canvas) throw new Error("BATTLE BALL canvas is missing");
+const canvasElement = app.querySelector<HTMLCanvasElement>("#game-canvas");
+if (!canvasElement) throw new Error("BATTLE BALL canvas is missing");
+const canvas: HTMLCanvasElement = canvasElement;
 const startScreen = app.querySelector<HTMLElement>("#start-screen");
 const pauseScreen = app.querySelector<HTMLElement>("#pause-screen");
 const resultScreen = app.querySelector<HTMLElement>("#result-screen");
