@@ -15,7 +15,7 @@ export class Match {
  serve(){if(this.phase!=='serve')return;this.phase='rally';const b=this.ball;b.x=this.players[this.server].x;b.z=this.players[this.server].z;b.y=.65;this.launch(-b.x,this.server===0?-4.8:4.8,1.28);this.last=this.server;this.players[this.server].swing=1;this.message='まずはワンバウンド';this.event('hit');}
  launch(x:number,z:number,t:number){const b=this.ball;b.vx=(x-b.x)/t;b.vz=(z-b.z)/t;b.vy=(.06-b.y+.5*G*t*t)/t;this.bounces=0;}
  hit(side:Side,kind:Shot|boolean='drive',aimX=0,depth=0){if(this.phase==='serve'){if(side===this.server)this.serve();return false;}if(this.phase!=='rally'||side===this.last)return false;const p=this.players[side],b=this.ball;
- if((side===0?b.z<0:b.z>0)||Math.hypot(p.x-b.x,p.z-b.z)>(this.assist&&side===0?1.55:1.22)||b.y>2.15||b.y<.07)return false;
+ if((side===0?b.z<0:b.z>0)||Math.hypot(p.x-b.x,p.z-b.z)>(this.assist&&side===0?1.8:1.22)||b.y>2.15||b.y<.07)return false;
  if(this.returns<2&&this.bounces===0)return false;
  if(this.bounces===0&&Math.abs(p.z)<=K+.18){this.point((1-side) as Side,'キッチン内ボレー');return true;}
  const volley=this.bounces===0;this.volleyLock=volley?side:-1;this.volleyTimer=volley?.45:0;this.last=side;this.returns++;this.rally++;p.swing=1;
@@ -25,12 +25,12 @@ export class Match {
  // Ensure intentional shots clear the tape; lower-quality drops float higher.
  const u=Math.abs(b.z)/(Math.abs(b.z)+Math.abs(target.z));const clearance=shot==='lob'?1.8:shot==='drop'?1.08+(1-q)*.5:1.07;
  const minFlight=Math.sqrt(Math.max(0,2*(clearance-((1-u)*b.y+u*.06))/(G*u*(1-u))));flight=Math.max(flight,minFlight);
- this.launch(target.x,target.z,flight);this.message=shot.toUpperCase()+' · '+(q>.78?'CLEAN':q>.45?'MOVING':'STRETCH');this.event('hit');return true;}
+ if(side===1&&this.assist)flight*=[1.16,1.1,1][this.difficulty];this.launch(target.x,target.z,flight);this.message=shot.toUpperCase()+' · '+(q>.78?'CLEAN':q>.45?'MOVING':'STRETCH');this.event('hit');return true;}
 
  landing(){const b=this.ball;const t=(b.vy+Math.sqrt(b.vy*b.vy+2*G*Math.max(0,b.y-.06)))/G;return {x:b.x+b.vx*t,z:b.z+b.vz*t};}
  step(dt:number,mx=0,mz=0){for(const p of this.players)p.swing=Math.max(0,p.swing-dt*4);if(this.phase==='over')return;
  if(this.phase==='point'){this.timer-=dt;if(this.timer<=0)this.setup();return;}
- const p=this.players[0];this.movement[0]+=(Math.min(1,Math.hypot(mx,mz))-this.movement[0])*Math.min(1,dt*12);if(this.phase==='rally'){const s=Math.hypot(mx,mz)>1?1/Math.hypot(mx,mz):1;p.x=Math.max(-W-1,Math.min(W+1,p.x+mx*s*4.6*dt));p.z=Math.max(.45,Math.min(L+1.6,p.z+mz*s*4.6*dt));}
+ const p=this.players[0];this.movement[0]+=(Math.min(1,Math.hypot(mx,mz))-this.movement[0])*Math.min(1,dt*12);if(this.phase==='rally'){const s=Math.hypot(mx,mz)>1?1/Math.hypot(mx,mz):1;p.x=Math.max(-W-1,Math.min(W+1,p.x+mx*s*5.1*dt));p.z=Math.max(.45,Math.min(L+1.6,p.z+mz*s*5.1*dt));}
  if(this.volleyTimer>0){this.volleyTimer-=dt;if(this.volleyLock>=0&&Math.abs(this.players[this.volleyLock].z)<=K+.18){this.point((1-this.volleyLock) as Side,'ボレー後のキッチン侵入');return;}}
  if(this.phase==='serve'){this.timer-=dt;if(this.server===1&&this.timer<=0)this.serve();return;}
  const c=this.players[1];const target=this.last===0?(this.bounces===0?this.landing():{x:this.ball.x+this.ball.vx*.1,z:this.ball.z+this.ball.vz*.1}):{x:0,z:-3.6};const tx=Math.max(-W-.5,Math.min(W+.5,target.x)),tz=Math.max(-L-.9,Math.min(-.6,target.z));const dx=tx-c.x,dz=tz-c.z,d=Math.hypot(dx,dz),speed=[2.6,3.5,4.3][this.difficulty];this.movement[1]+=(Number(d>.1)-this.movement[1])*Math.min(1,dt*12);if(d>.1){c.x+=dx/d*Math.min(d,speed*dt);c.z+=dz/d*Math.min(d,speed*dt);}
