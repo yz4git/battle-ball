@@ -46,7 +46,7 @@ for(const [id,kind] of [['hit','drive'],['lob','lob'],['drop','drop']] as const)
  const cancel=(e:PointerEvent)=>{if(shotPointer?.id===e.pointerId){shotPointer=null;button.classList.remove('holding');queue=0;}};button.addEventListener('pointercancel',cancel);button.addEventListener('lostpointercapture',cancel);
 }
 const stick=el('stick');function stickMove(e:PointerEvent){const r=stick.getBoundingClientRect(),dx=(e.clientX-r.left-r.width/2)/(r.width*.34),dy=(e.clientY-r.top-r.height/2)/(r.height*.34),len=Math.max(1,Math.hypot(dx,dy));mx=dx/len;mz=dy/len;el('knob').style.transform=`translate(${mx*32}px,${mz*32}px)`;}
-stick.addEventListener('pointerdown',e=>{if(stickId!==null)return;stickId=e.pointerId;stick.setPointerCapture(e.pointerId);stickMove(e);});stick.addEventListener('pointermove',e=>{if(e.pointerId===stickId)stickMove(e);});function release(e:PointerEvent){if(e.pointerId!==stickId)return;stickId=null;mx=mz=0;el('knob').style.transform='';}stick.addEventListener('pointerup',release);stick.addEventListener('pointercancel',release);
+stick.addEventListener('pointerdown',e=>{e.preventDefault();if(stickId!==null)return;stickId=e.pointerId;stick.setPointerCapture(e.pointerId);stickMove(e);});stick.addEventListener('pointermove',e=>{if(e.pointerId===stickId)stickMove(e);});function release(e:PointerEvent){if(e.pointerId!==stickId)return;stickId=null;mx=mz=0;el('knob').style.transform='';}stick.addEventListener('pointerup',release);stick.addEventListener('pointercancel',release);
 function clear(){shotPointer?.button.classList.remove('holding');shotPointer=null;keys.clear();mx=mz=queue=0;stickId=null;el('knob').style.transform='';}
 window.addEventListener('keydown',e=>{if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key))e.preventDefault();keys.add(e.key.toLowerCase());if(!e.repeat&&['j','k','l',' '].includes(e.key.toLowerCase()))inputShot(e.key.toLowerCase()==='k'?'lob':e.key.toLowerCase()==='l'?'drop':'drive');if(e.key.toLowerCase()==='q')aim=Math.max(-1,aim-.35);if(e.key.toLowerCase()==='e')aim=Math.min(1,aim+.35);if(e.key.toLowerCase()==='r')aim=0;if(e.key==='Escape')togglePause();});window.addEventListener('keyup',e=>keys.delete(e.key.toLowerCase()));
 function togglePause(){if(!active)return;paused=!paused;clear();el('overlay').hidden=!paused;el('start').textContent=paused?'試合を再開 →':'コートに入る →';}
@@ -64,5 +64,9 @@ function frame(now:number){requestAnimationFrame(frame);const dt=Math.min(.05,(n
  for(let i=trail.length-1;i>0;i--)trail[i].position.copy(trail[i-1].position);trail[0].position.copy(ball.position);trail.forEach(t=>t.visible=game.phase==='rally');
  el('you').textContent=String(game.score[0]);el('cpu').textContent=String(game.score[1]);el('status').textContent=active?game.message:'PARK COURT / AFTERNOON';el('rally').textContent=active?`${game.server===0?'● YOU SERVE':'● CPU SERVE'}  ·  RALLY ${game.rally}`:'';el('hit').classList.toggle('ready',game.phase==='serve'&&game.server===0||game.phase==='rally'&&game.last===1&&Math.hypot(b.x-game.players[0].x,b.z-game.players[0].z)<1.6&&b.y<2.1);renderer.render(scene,camera);}
 requestAnimationFrame(frame);
+// Block native selection and long-press callouts without disabling menu scrolling.
+document.addEventListener('selectstart',e=>e.preventDefault());
+document.addEventListener('dragstart',e=>e.preventDefault());
+for(const type of ['touchstart','touchmove'] as const){el('controls').addEventListener(type,e=>e.preventDefault(),{passive:false});}
 document.addEventListener('gesturestart',e=>e.preventDefault());document.addEventListener('contextmenu',e=>e.preventDefault());
 if('serviceWorker' in navigator){void navigator.serviceWorker.getRegistrations().then(rs=>rs.forEach(r=>void r.unregister()));}
