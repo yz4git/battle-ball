@@ -1,36 +1,11 @@
-# BATTLE BALL
+# PICKLE — 3D Pickleball
 
-`BATTLE BALL` is a mobile-first 3D dodgeball action game built around player-controlled rallies rather than CPU-vs-CPU exchanges.
+A complete replacement of the former Battle Ball dodgeball implementation. Mobile-first singles against three CPU levels, procedural Three.js park and athletes, ballistic ball simulation at 120 Hz, sound effects, and touch/keyboard input. No external asset services required at runtime.
 
-Core rules in the current 3v3 slice:
+## Play
+Left pad moves; SHOT/J returns or serves; LOB/K sends a high deep shot. Direction when hitting sets aim: left/right targets the sideline, forward drops short, backward goes deep. Input buffer lasts 420 ms. Assisted mode increases paddle reach, without moving the player automatically. Pause on backgrounding. Portrait supported; landscape recommended.
 
-- one player-controlled Blue fighter drives the rally;
-- CPU teammates do not start autonomous throw/catch loops;
-- one `BALL` input handles both catching and throwing;
-- hold `BALL` to aim, use the left pad to choose a target, then release to throw;
-- enemy possession always enters a visible telegraph before the enemy throws at the player;
-- `PASS` delegates exactly one role-specific assist attack to a teammate;
-- damage replaces instant elimination and matches remain short;
-- fixed-step simulation remains independent from Three.js and the DOM for future network play.
+Singles side-out scoring, 11 win by 2, diagonal service from alternating courts, first two returns require a bounce, kitchen volley and immediate momentum faults, out/net/double-bounce calls. This is a casual adaptation, not a certified tournament simulator; body collisions and exhaustive foot-fault adjudication are omitted.
 
-## Commands
-
-```bash
-npm install
-npm run dev
-npm test
-npm run build
-```
-
-## Controls
-
-- Left virtual pad: move; while holding `BALL`, choose the target
-- `BALL`: tap an incoming ball to catch / hold while possessing the ball to aim / release to throw
-- `DASH`: short invulnerable burst
-- `PASS`: send the ball to a teammate for one role-specific assist attack
-
-Keyboard fallback: WASD / arrow keys, `J` or `K` for BALL, `L` for dash, `I` for pass.
-
-## Network-ready boundary
-
-`src/game/simulation.ts` owns deterministic match rules. `src/game/netcode.ts` defines ticked input and snapshot messages. The current game uses a local transport, but a future online mode can send `InputCommand` packets to an authoritative match room and broadcast snapshots or compact event deltas.
+## Development
+`npm ci`, `npm test`, `npm run build`, `npm run dev`.

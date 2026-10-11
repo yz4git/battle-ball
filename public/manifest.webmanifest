@@ -1,12 +1,1 @@
-{
-  "name": "BATTLE BALL",
-  "short_name": "BATTLE BALL",
-  "description": "Catch the attack. Reverse the match.",
-  "start_url": "/",
-  "scope": "/",
-  "display": "standalone",
-  "orientation": "landscape",
-  "background_color": "#080d1c",
-  "theme_color": "#080d1c",
-  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
-}
+{"name":"PICKLE 3D Pickleball","short_name":"PICKLE","start_url":"./","display":"standalone","orientation":"landscape","background_color":"#102731","theme_color":"#102731","icons":[{"src":"icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any"}]}
